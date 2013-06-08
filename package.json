@@ -1,0 +1,20 @@
+{
+	"name": "LogiblockIDE",
+	"version": "0.0.1",
+	"private": true,
+	"description": "Logiblock IDE",
+	"license": "Proprietary",
+
+	"main": "IDE.html",
+	"window":
+	{
+		"toolbar": true
+	},
+	"dependencies":
+	{
+		"moduleverse": ">0"
+	},
+	"devDependencies":
+	{
+	}
+}

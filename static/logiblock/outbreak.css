@@ -1,0 +1,108 @@
+.cf { zoom: 1; }
+.cf:before,
+.cf:after { content: ""; display: table; }
+.cf:after { clear: both; }
+
+img.outbreakLogo
+{
+	width:36px;
+	height:38px;
+	background:url('../images/outbreakLogo36.png') 0 0;
+	border-style: none;
+	margin: -11px 0px -9px 0px;
+}
+
+a.ext
+{
+	background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAIpJREFUeNpi/P//PwNeUCaJooARrqFMcj+QdEBT3gili4CYF8RgQVKshaQAGURCFX8G0SxQQQew4q7nDUhOaYAqVgPiW0C8HIjrmfC4Hl0xA9BARnwalqMoBpqO8AM2AHFeA5LzwICJgURAsgaYkw4AcSbQalzqMqFqCEYcA9zArueOqBqIBAABBgCufipGUpAq8wAAAABJRU5ErkJggg==') center right no-repeat;
+	padding-right: 18px;
+}
+
+a.extPDF
+{
+	background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAMCAYAAAB4MH11AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAM5JREFUeNpi/P//PwNVQZkkioGMYAvKJPcD2Q5oStMZup7PwmMQNj2NULoIiHmRLQDZ6oikcD/cEgYGiCVdz9EN1wLi6VisjgRiNSD+DLKEhYCHZ0JpdJ84gF3b9bwBydIGJMNvAfFyIK5nQtO4H6slyK7HDdANB/makQlHGDYiYWLBchTDga4HEehBVA+TgAJHND5uAAmuBqTgYsBmQSMDlQE2HyCDA9S2gFgfgCzOBAYFLvlMmOPwZTSEYV3PHYnMaBh6GKleVKABgAADAJmqRHKA/Ic8AAAAAElFTkSuQmCC') center right no-repeat;
+	padding-right: 30px;
+}
+
+.navbar .nav > li > a > .falseLink
+{
+	color: #FF7518;
+}
+
+a
+{
+	color: #FF7518;
+}
+
+a:hover
+{
+	color: #D05F13;
+}
+
+li.logins p
+{
+	color: #333;
+	padding: 3px 15px;
+}
+li.logins a
+{
+	color: #ff7518;
+	display: inline;
+	padding: 3px;
+}
+li.logins hr
+{
+	margin: 7px 0;
+}
+li.logins input
+{
+	width: 12em;
+	margin: 3px 15px;
+}
+
+input.invalid
+{
+	border: 1px solid #F00000;
+}
+
+a.thumbnail:hover
+{
+	border-color:#FF7518;
+	-webkit-box-shadow:0 1px 4px rgba(255,117,24,0.25);
+	-moz-box-shadow:0 1px 4px rgba(255,117,24,0.25);
+	box-shadow:0 1px 4px rgba(255,117,24,0.25);
+}
+
+.sectionBreak
+{
+	margin-top: 4em;
+}
+
+.break
+{
+	clear: both;
+}
+
+p.bigger
+{
+	font-size: 18px;
+	font-weight: 200;
+	line-height: 24px;
+}
+
+.passwordLogin input.loginButton
+{
+	width: 6em;
+}
+
+p.line
+{
+	margin-bottom: 2px;
+}
+
+.ide-line-error
+{
+	background-color: rgb(255, 128, 128);
+	position: absolute;
+	z-index: 5;
+}

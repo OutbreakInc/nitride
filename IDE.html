@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<!-- Based on Bootstrap from Twitter ( http://twitter.github.com/bootstrap/ ) - thanks, guys! -->
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<title>Logiblock IDE (0.2 alpha)</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<meta name="description" content="{{description}}"/>
+	<meta name="author" content="Outbreak, Inc."/>
+	
+	<link rel="stylesheet" type="text/css" href="static/bootstrap-2.3.1/bootstrap-2.3.1.min.css" media="screen"/>
+	<link rel="stylesheet" type="text/css" href="static/logiblock/outbreak.css" media="screen"/>
+	<link rel="stylesheet" type="text/css" href="static/logiblock/IDE.css" media="screen"/>
+	
+	<style type="text/css">
+		body{ padding-top: 60px; padding-bottom: 40px;}
+	</style>
+	
+	<!-- IE6-8 support-->
+	<!--[if lt IE 9]>
+		<script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+	<![endif]-->
+	<link rel="icon" type="image/png" href="/images/outbreakFavicon.png"/>
+</head>
+
+<body>
+	<div class="navbar navbar-inverse navbar-fixed-top">
+		<div class="navbar-inner">
+		<div class="topbarContainer">
+			<a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+				<span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span>
+			</a>
+			<a class="brand" id="homeButton" href="/"><!-- <img class="outbreakIDELogo" src="/images/blank.gif"></img> -->nitr<span class="colorOrange">ide</span> <small><em>alpha</em></small></a>
+			<div class="nav-collapse">
+				
+				<ul id="tabs" class="nav">
+					<li class="divider-vertical"></li>
+					<script type="text/x-handlebars" data-view="topNavigation">
+					{{#projects}}
+					<li><a href="{{this.href}}">{{this.title}}</a></li>
+					{{/projects}}
+					</script>
+				</ul>
+				
+				<ul id="settings" class="nav pull-right">
+					<li class="dropdown">
+						<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+							Options<b class="caret"></b>
+						</a>
+						<ul class="dropdown-menu">
+							<li><a href="#file1">File 1</a></li>
+							<li><a href="#file2">File 2</a></li>
+							<li class="divider"></li>
+							<li><a href="#settings">Settings</a></li>
+							<li class="divider"></li>
+							<li><a href="#">Sign out</a></li>
+						</ul>
+					</li>
+				</ul>
+			</div><!-- /.nav-collapse  -->
+		</div>
+		</div>
+	</div>
+	
+	<div class="container" id="home" style="display:none">
+		<div class="row break sectionBreak">
+		<script type="text/x-handlebars" data-view="blog">
+			{{#each .}}
+			<div class="span4">
+				<h2>{{title}}</h2>
+				<small>{{date}} by {{>user author}}</small>
+				<p>
+				{{{body}}}
+				</p>
+			</div>
+			{{/each}}
+		</script>
+		</div>
+		<hr class="break"/>
+		<div class="row break">
+			<div class="span12">
+				<button class="btn btn-large btn-primary pull-left">New</button>
+				<form class="search pull-left btn-large">
+					<input id="projectSearch" type="text" class="search-query" placeholder="Search Projects...">
+				</form>
+			</div>
+		</div>
+		<div class="row break">
+			<div class="span12">
+				<ul id="projectChooser" class="thumbnails break">
+				<script type="text/x-handlebars" data-view="homeThumbnail">
+					<li class="span3">
+						{{#each .}}
+						<a href="#" class="thumbnail bigthumb">
+							<img src="static/tex1.jpg"/>
+						</a>
+						<h3>{{name}}</h3>
+						<small>{{date}}</small>
+						{{/each}}
+					</li>
+				</script>
+				</ul>
+			</div>
+		</div>
+	</div>
+	
+
+	<div id="editor" class="editorView" style="display:block">
+		<ul class="sidebar">
+			<li>
+				<button class="btn">Verify</button>
+				<button class="btn">Debug</button>
+			</li>
+		</ul>
+		<div class="leftColumn">
+			<!--<ul id="editorTabs" class="nav-tabs">
+				<li class="active"><a href="#">main.cpp</a></li>
+				<li><a href="#">GalagoAPI.cpp</a></li>
+			</ul>-->
+			<div id="ace" class="documentView">#include &lt;GalagoAPI.h&gt;
+
+int main(void)
+{
+	while(true)
+	{
+		io.led = !io.led;
+		system.wait(system.delay(500));
+	}
+}
+</div>
+		</div>
+	</div>
+
+	<script type="text/x-handlebars" data-helper="user">
+		<a href="/users/{{id}}/{{username}}">{{username}}</a>
+	</script>
+	
+	<script src="static/jquery-1.7.2/jquery-1.7.2.min.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/handlebars-1.0.0-rc.3/handlebars-1.0.0-rc.3.min.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/bootstrap-2.3.1/bootstrap-2.3.1.min.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/ace-custom/ace.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/ace-custom/mode-c_cpp.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/underscore-1.3.3/underscore-1.3.3.js" type="application/javascript" charset="utf-8"></script>
+	<script type="application/javascript">
+		
+		var gui = require("nw.gui");
+		
+		//debug
+		var mainWindow = gui.Window.get();
+		mainWindow.showDevTools();
+		
+		//main
+		var IDE = require("./IDE");
+
+		IDE.init();
+
+	</script>
+</body>
+</html>
