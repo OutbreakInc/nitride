@@ -5,22 +5,19 @@
 	<meta charset="utf-8"/>
 	<title>Logiblock IDE (0.2 alpha)</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-	<meta name="description" content="{{description}}"/>
+	<meta name="description" content="Logiblock IDE"/>
 	<meta name="author" content="Outbreak, Inc."/>
 	
 	<link rel="stylesheet" type="text/css" href="static/bootstrap-2.3.1/bootstrap-2.3.1.min.css" media="screen"/>
 	<link rel="stylesheet" type="text/css" href="static/logiblock/outbreak.css" media="screen"/>
 	<link rel="stylesheet" type="text/css" href="static/logiblock/IDE.css" media="screen"/>
+	<link rel="stylesheet" type="text/css" href="static/yui-2.9.0/treeview.css" media="screen"/>
 	
 	<style type="text/css">
 		body{ padding-top: 60px; padding-bottom: 40px;}
 	</style>
 	
-	<!-- IE6-8 support-->
-	<!--[if lt IE 9]>
-		<script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
-	<![endif]-->
-	<link rel="icon" type="image/png" href="/images/outbreakFavicon.png"/>
+	<link rel="icon" type="image/png" href="images/outbreakFavicon.png"/>
 </head>
 
 <body>
@@ -30,30 +27,46 @@
 			<a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
 				<span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span>
 			</a>
-			<a class="brand" id="homeButton" href="/"><!-- <img class="outbreakIDELogo" src="/images/blank.gif"></img> -->nitr<span class="colorOrange">ide</span> <small><em>alpha</em></small></a>
+			<a class="brand" id="homeButton" href="#"><!-- <img class="outbreakIDELogo" src="/images/blank.gif"></img> -->nitr<span class="colorOrange">ide</span> <small><em>alpha</em></small></a>
 			<div class="nav-collapse">
 				
 				<ul id="tabs" class="nav">
-					<li class="divider-vertical"></li>
 					<script type="text/x-handlebars" data-view="topNavigation">
+					<li class="divider-vertical"></li>
 					{{#projects}}
 					<li><a href="{{this.href}}">{{this.title}}</a></li>
 					{{/projects}}
 					</script>
+					<li class="divider-vertical"></li>
+					<li class="active"><a href="#/main.cpp">main.cpp</a></li>
+					<li><a href="#/GalagoAPI.cpp">GalagoAPI.cpp</a></li>
+					<li><a href="#/GalagoAPI.h">GalagoAPI.h</a></li>
 				</ul>
 				
 				<ul id="settings" class="nav pull-right">
+					<li class="divider-vertical"></li>
 					<li class="dropdown">
-						<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+						<a id="dropdownMenu" href="#" class="dropdown-toggle" data-toggle="dropdown">
 							Options<b class="caret"></b>
 						</a>
 						<ul class="dropdown-menu">
+							<script type="text/x-handlebars" data-view="dropdownMenuItems">
+							{{#files}}
 							<li><a href="#file1">File 1</a></li>
-							<li><a href="#file2">File 2</a></li>
+							<li class="selected"><a href="#file2">File 2</a></li>
+							{{/files}}
 							<li class="divider"></li>
 							<li><a href="#settings">Settings</a></li>
 							<li class="divider"></li>
-							<li><a href="#">Sign out</a></li>
+							<li><a href="#">Help</a></li>
+							</script>
+							<li class="selected"><a href="#/main.cpp">main.cpp</a></li>
+							<li><a href="#/GalagoAPI.cpp">GalagoAPI.cpp</a></li>
+							<li><a href="#/GalagoAPI.h">GalagoAPI.h</a></li>
+							<li class="divider"></li>
+							<li><a href="#settings">Settings</a></li>
+							<li class="divider"></li>
+							<li><a href="#">Help</a></li>
 						</ul>
 					</li>
 				</ul>
@@ -62,7 +75,8 @@
 		</div>
 	</div>
 	
-	<div class="container" id="home" style="display:none">
+	<!--
+	<div class="container" id="home" style="display:hidden">
 		<div class="row break sectionBreak">
 		<script type="text/x-handlebars" data-view="blog">
 			{{#each .}}
@@ -103,31 +117,46 @@
 			</div>
 		</div>
 	</div>
+	-->
 	
-
-	<div id="editor" class="editorView" style="display:block">
-		<ul class="sidebar">
-			<li>
-				<button class="btn">Verify</button>
-				<button class="btn">Debug</button>
-			</li>
-		</ul>
+	<div id="editor" class="editorView">
 		<div class="leftColumn">
-			<!--<ul id="editorTabs" class="nav-tabs">
-				<li class="active"><a href="#">main.cpp</a></li>
-				<li><a href="#">GalagoAPI.cpp</a></li>
-			</ul>-->
-			<div id="ace" class="documentView">#include &lt;GalagoAPI.h&gt;
-
-int main(void)
-{
-	while(true)
-	{
-		io.led = !io.led;
-		system.wait(system.delay(500));
-	}
-}
-</div>
+			<div class="documentView"></div>
+		</div>
+		<div class="sidebar">
+			<div class="sidebarScroll">
+				<ul class="scroll">
+					<li>
+						<div class="sidebarHeader">
+							Callstack
+						</div>
+						<div class="sidebarSection">
+							<ul id="stack" class="callStack">
+								<li class="odd">Galago::IO::SPI::write</li>
+								<li class="even selected">Galago::IO::SPI::read</li>
+								<li class="odd">main</li>
+							</ul>
+						</div>
+					</li>
+					<li>
+						<div class="sidebarHeader">
+							Locals
+						</div>
+						<div class="sidebarSection yui-skin-sam">
+							<div id="varTree">
+							</div>
+						</div>
+					</li>
+				</ul>
+			</div>
+			<ul class="noscroll">
+				<li class="controlButtons">
+					<button class="btn">V</button>
+					<button class="btn">D</button>
+					<button class="btn">P</button>
+					<button class="btn">X</button>
+				</li>
+			</ul>
 		</div>
 	</div>
 
@@ -136,12 +165,20 @@ int main(void)
 	</script>
 	
 	<script src="static/jquery-1.7.2/jquery-1.7.2.min.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/underscore-1.3.3/underscore-1.3.3.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/handlebars-1.0.0-rc.3/handlebars-1.0.0-rc.3.min.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/bootstrap-2.3.1/bootstrap-2.3.1.min.js" type="application/javascript" charset="utf-8"></script>
+	
 	<script src="static/ace-custom/ace.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/ace-custom/mode-c_cpp.js" type="application/javascript" charset="utf-8"></script>
-	<script src="static/underscore-1.3.3/underscore-1.3.3.js" type="application/javascript" charset="utf-8"></script>
-	<script type="application/javascript">
+
+	<script src="static/yui-2.9.0/yahoo-dom-event.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/yui-2.9.0/treeview-min.js" type="application/javascript" charset="utf-8"></script>
+	
+	<script src="Dagger.js" type="application/javascript" charset="utf-8"></script>
+	<script src="IDE.js" type="application/javascript" charset="utf-8"></script>
+
+	<!--<script type="application/javascript">
 		
 		var gui = require("nw.gui");
 		
@@ -152,8 +189,8 @@ int main(void)
 		//main
 		var IDE = require("./IDE");
 
-		IDE.init();
+		var homeView = IDE.init();
 
-	</script>
+	</script>-->
 </body>
 </html>

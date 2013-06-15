@@ -99,10 +99,3 @@ p.line
 {
 	margin-bottom: 2px;
 }
-
-.ide-line-error
-{
-	background-color: rgb(255, 128, 128);
-	position: absolute;
-	z-index: 5;
-}

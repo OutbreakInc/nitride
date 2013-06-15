@@ -1,4 +1,5 @@
 var childProcess = require("child_process");
+//var util = require("util");
 
 //objective:
 //  turn the following high-level actions into sequences of gdb commands:
@@ -7,16 +8,63 @@ var childProcess = require("child_process");
 //    halted, async-error
 
 
+function parseGDB_MI(response)
+{
+	var o = {};
+	_parse_inner(response.match(/("([^"\\]|\\.)*")|,|([\w-]+)|=|\{|\}|\[|\]/g), o);
+	return(o);
+}
+
+function _parse_inner(tokens, o)
+{
+	while(tokens.length > 0)
+	{
+		var t = tokens.shift(), k, v;
+		switch(t)
+		{
+		case ",":
+		case "}":
+		case "]":
+			if(v !== undefined)
+				if(o instanceof Array)	o.push(v);
+				else					o[k] = v;
+			k = v = undefined;
+			
+			if(t == ",")	break;
+			else			return;
+		case "=":
+			k = v;
+			break;
+		case "{":
+			arguments.callee(tokens, v = {});
+			break;
+		case "[":
+			arguments.callee(tokens, v = []);
+			break;
+		default:
+			v = ((typeof t == "string") && (t[0] == '"'))? t.substr(1, t.length - 2) : t;
+			if(!isNaN(v))	v = Number(v);
+			break;
+		}
+	}
+	if(o instanceof Array)	o.push(v);
+	else					o[k] = v;
+}
+
 Command.prototype =
 {
 	command: undefined,
 	callback: undefined,
 	response: "",
-	error: false
+	error: false,
+	active: true,
+	expectsResponse: true
 };
-function Command(cmd, callback)
+function Command(cmd, expectsResponse, callback)
 {
 	this.command = cmd || "";
+	this.active = true;
+	this.expectsResponse = expectsResponse;
 	this.callback = callback || function()
 	{
 		console.log("(no callback associated with command \"" + cmd + "\".)");
@@ -25,47 +73,142 @@ function Command(cmd, callback)
 
 CodeTalker.prototype =
 {
-	build: function CodeTalker_build()
+	connect: function CodeTalker_connect(port, callback)
+	{
+		gdb.submit("-target-select remote localhost:" + port, function(taskContext)
+		{
+			if(taskContext.response == "connected")
+			{
+				this._connectedPort = port;
+				callback();
+			}
+			else
+			{
+				console.log("connecting to the hardware failed!");
+				callback(new Error("Could not connect to the specified device"));
+			}
+		}.bind(this));
+	},
+
+	build: function CodeTalker_build(callback)
 	{
 	},
 	
-	flash: function CodeTalker_flash()
+	flash: function CodeTalker_flash(callback)
 	{
+		this.submit("-target-download", function()
+		{
+			if(taskContext.response == "done")
+				callback();
+			else
+				callback(new Error("Firmware flash failed."));
+		}.bind(this));
 	},
 	
 	restartRun: function CodeTalker_restartRun()
 	{
+		this.submit("-exec-continue", function()
+		{
+			if(taskContext.response == "running")
+				callback();
+			else
+				callback(new Error("Could not continue."));
+		}.bind(this));
 	},
 	
 	restartPaused: function CodeTalker_restartPaused()
 	{
 	},
 	
-	setBreakpoints: function CodeTalker_setBreakpoints()
+	setBreakpoint: function CodeTalker_setBreakpoint()
 	{
 	},
 	
-	run: function CodeTalker_run()
+	run: function CodeTalker_run(callback)
 	{
+		this.submit("-exec-continue", function(taskContext)
+		{
+			if(taskContext.response == "running")
+			{
+				//schedule callback for as soon as the *status changes
+				this._statusCallback = function CodeTalker_run_onCompletion()
+				{
+					this._statusCallback = null;
+					callback();
+				}.bind(this);
+			}
+			else
+				callback(new Error("Could not continue."));
+		}.bind(this));
 	},
 	
-	pause: function CodeTalker_pause()
+	pause: function CodeTalker_pause(callback)
 	{
+		this.submit("-exec-interrupt", function(taskContext)
+		{
+			if(taskContext.response == "done")
+			{
+				//schedule callback for as soon as the *status changes
+				this._statusCallback = function CodeTalker_pause_onCompletion()
+				{
+					this._statusCallback = null;
+					callback(undefined, taskContext.args);
+				}.bind(this);
+			}
+			else
+				callback(new Error("Could not continue."));
+		}.bind(this));
+	},
+	
+	updateCallstack: function CodeTalker_updateCallstack(callback)
+	{
+		this.submit("-stack-list-frames", function(taskContext)
+		{
+			if(taskContext.response == "done")
+			{
+				this._lastCallstack = taskContext.args.stack;
+				this.submit("-stack-list-arguments --simple-values", function(taskContext)
+				{
+					if(taskContext.response == "done")
+					{
+						//merge args
+						for(var i = 0; i < this._lastCallstack.length; i++)
+							this._lastCallstack[i].args = taskContext.args["stack-args"][i].args;	//arg!
+
+						callback(undefined, this._lastCallstack);
+					}
+					else
+						callback(new Error("Could not fetch arguments for callstack."));
+				}.bind(this));
+			}
+			else
+				callback(new Error("Could not fetch callstack."));
+		}.bind(this));
+	},
+
+	evalExpression: function CodeTalker_evalExpression()
+	{
+		;
 	},
 	
 	setExpression: function CodeTalker_setExpression()
 	{
 	},
 	
-	submit: function CodeTalker_submit(command, callback)
+	submit: function CodeTalker_submit(command, expectsResponse, callback)
 	{
-		this._tasks.push(new Command(command, callback));
+		if(arguments.length == 2)
+		{
+			callback = expectsResponse;
+			expectsResponse = true;
+		}
+		
+		this._tasks.push(new Command(command, expectsResponse, callback));
 		if(!this._tasksActive)
 			this.nextTask();
-		else
-			console.log("not spurring queue.");
+		//else
+		//	console.log("not spurring queue.");
 	},
-	
 	nextTask: function CodeTalker_nextTask()
 	{
 		if(this._tasks.length == 0)
@@ -83,6 +226,33 @@ CodeTalker.prototype =
 		console.log("submitting command: >>" + this._tasks[0].command + "<<");
 		this._process.stdin.write(this._tasks[0].command + "\n");
 	},
+	cycleTask: function CodeTalker_cycleTask()
+	{
+		if(this._tasks.length > 0)
+		{
+			if(		this._tasks[0].active
+					|| (this._tasks[0].expectsResponse && (this._tasks[0].response == undefined))
+				)
+				return;	//not finished yet
+
+			var task = this._tasks.shift();
+			
+			if(this._tasks.length == 0)
+				_tasksActive = false;
+			
+			//tasks added between here
+			var outerTasks = this._tasks;
+			this._tasks = [];
+			
+			task.callback(task);
+			
+			this._tasks = this._tasks.concat(outerTasks);
+			//..and here get prioritized before any others
+			
+			this.nextTask();
+		}
+	},
+	
 	quit: function CodeTalker_quit()
 	{
 		if(this._process != null)
@@ -95,11 +265,16 @@ CodeTalker.prototype =
 	
 	_process: null,
 	_restartWhenDied: true,
-	_tasks: []
+	_tasks: [],
+
+	//state:
+	_connectedPort:		undefined,
+	_runState:			undefined,
+	_statusCallback:	undefined,
+	_stopReason:		undefined,
 }
 function CodeTalker(processPath, processArgs)
 {
-	var ths = this;
 	var process = childProcess.spawn(processPath, processArgs,
 		{
 			env:
@@ -112,88 +287,145 @@ function CodeTalker(processPath, processArgs)
 
 	process.stdout.on("data", function(d)
 	{
-		//console.log("stdout: ", d);
+		console.log("stdout: >>", d, "<<");
 		
-		//parse gdb output
-		if(d.substr(-6) == "(gdb) ")
+		var response = d.trim().split("\n");
+
+		for(var i = 0; i < response.length; i++)	//for each line
 		{
-			console.log("detected gdb prompt, task is complete");
+			var r = response[i].trim();
 			
-			if(ths._tasks.length > 0)
+			var token = r.match(/^\d+/);
+			if(token != null)	token = token[0];
+
+			//parse gdb output
+			if(r == "(gdb)")
 			{
-				var task = ths._tasks.shift();
-				
-				task.response += d.substr(0, d.length - 6);
-				
-				if(ths._tasks.length == 0)
-					_tasksActive = false;
-				
-				//tasks added between here
-				var outerTasks = ths._tasks;
-				ths._tasks = [];
-				
-				task.callback(task);
-				
-				ths._tasks = ths._tasks.concat(outerTasks);
-				//..and here get prioritized before any others
-				
-				ths.nextTask();
+				if(this._tasks[0])
+					this._tasks[0].active = false;
+				else
+					console.log("ERROR >>>> prompt received for a task that has completed already!");
+
+				this.cycleTask();
+			}
+			else
+			{
+				var command, args, commaSplit = r.indexOf(",");
+				if(commaSplit >= 0)
+				{
+					command = r.substr(0, commaSplit);
+					args = parseGDB_MI(r.substr(commaSplit + 1));
+				}
+				else
+					command = r;
+
+				var sym = command.substr(0, 1)
+				if(sym == "^")
+				{
+					//complete a command with this response
+					if(this._tasks[0])
+					{
+						this._tasks[0].response = command.substr(1);
+						this._tasks[0].args = args;
+					}
+					else
+						console.log("ERROR >>>> response received for a task that has completed already!");
+
+					this.cycleTask();
+				}
+				else if(sym == "~")
+				{
+					console.log("GDB: ", command);
+				}
+				else if(sym == "&")
+				{
+					console.log("GDB: ", command);
+				}
+				else switch(command)
+				{
+				case "*stopped":
+					console.log("update run state with: ", command, " and args: ", args);
+					this._runState = "stopped";
+					this._stopReason = args;
+					if(this._statusCallback)
+						this._statusCallback();
+					break;
+				case "*running":
+					console.log("update run state with: ", command, " and args: ", args);
+					this._runState = "running";
+					if(this._statusCallback)
+						this._statusCallback();
+					break;
+				case "=breakpoint-modified":
+					console.log("update breakpoint table with: ", args);
+					break;
+				}
 			}
 		}
-		else if(ths._tasks.length > 0)
-		{
-			ths._tasks[0].response += d;
-		}
-	});
+	}.bind(this));
 	
 	process.stderr.on("data", function(d)
 	{
-		//console.log("stderr: ", d);
+		console.log("stderr: ", d);
 		
-		if(ths._tasks.length > 0)
+		if(this._tasks.length > 0)
 		{
-			ths._tasks[0].response += d;
-			ths._tasks[0].error = true;
+			//this._tasks[0].response += d;
+			this._tasks[0].error = true;
 		}
-	});
+	}.bind(this));
 	
 	process.on("exit", function(code)
 	{
 		console.log("process exited with: ", code);
 
-		if(ths._restartWhenDied)
+		if(this._restartWhenDied)
 		{
 			console.log("Respawning process in a moment...");
-			setTimeout(function(){ths.spawn(processArgs, port)}, 500);
+			setTimeout(function(){this.spawn(processArgs, port)}, 500);
 		}
+	}.bind(this));
+	
+	this._process = process;
+	
+	//prime the task queue
+	var initialCommand = new Command("", false, function()
+	{
+		console.log("gdb started.");
 	});
-	
-	ths._process = process;
-	
-	ths._tasks.push({callback: function()
+	this._tasks.push(initialCommand);
+	this._tasksActive = true;
+
+	//first real task
+	this.submit("-gdb-set target-async 1", function()
 	{
 		console.log("gdb ready.");
-	}});
-	ths._tasksActive = true;
+	});
 }
 
 
+var gdb = new CodeTalker("/Users/kuy/Projects/Galago/galago-ide/SDK/bin/arm-elf-gdb", ["--interpreter=mi2", "/Users/kuy/Projects/Galago/ide/ardbeg/testProject/module.elf"]);
 
-var gdb = new CodeTalker("/Users/kuy/Projects/Galago/galago-ide/SDK/bin/arm-elf-gdb", ["/Users/kuy/Projects/Galago/ide/ardbeg/testProject/module.elf"]);
-
-gdb.submit("target remote localhost:1033", function(taskContext)
+function genericCompletion(taskContext)
 {
-	console.log("task completed with: >>" + taskContext.response + "<<");
-});
-
+	console.log("task \"" + taskContext.command + "\" completed with: ", taskContext.response, " and args: ", taskContext.args);
+}
 
 //testing:
+process.stdin.setEncoding("utf8");
 process.stdin.on("data", function(d)
 {
-	console.log("data");
-	gdb.submit(d, function(taskContext)
+	d = String(d).trim();
+	var method = d.split(" ");
+	if(CodeTalker.prototype[method[0]])
 	{
-		console.log("response: ", taskContext.response);
-	});
+		method.push(function()
+		{
+			console.log("completed with arguments: ", arguments, " >>> ", JSON.stringify(arguments[1]));
+		});
+		CodeTalker.prototype[method.shift()].apply(gdb, method);
+	}
+	else
+		gdb.submit(d, genericCompletion);
 });
 process.stdin.resume();

@@ -1,11 +1,6 @@
-//((typeof window.jQuery != "undefined")? window.$ : function(f){f();})
-(function()
-{
-
-this.prototype = window;
-
-_ = window._;
-Handlebars = window.Handlebars;
+//var _ = require("underscore-1.3.3/handlebars-1.0.0-rc.3.min.js");
+//var Handlebars = require("handlebars-1.0.0-rc.3/handlebars-1.0.0-rc.3.min.js");
+//this.prototype = window;
 
 if(!Function.prototype.bind)
 	Function.prototype.bind = function(c){var f = this;return(function(){f.apply(c, arguments);});}
@@ -170,6 +165,7 @@ function DaggerObject()
 					l.forEach(function(o){o.callback.call(o.context, queuedEvent)});
 			}.bind(this));
 		}, enumerable: false});
+	Object.defineProperty(this, "_super", {value: DaggerObject.prototype, enumerable: false});
 }
 
 DaggerArray.prototype = _.extend(_.clone(Array.prototype), DaggerObject.prototype,
@@ -234,7 +230,7 @@ DaggerArray.prototype = _.extend(_.clone(Array.prototype), DaggerObject.prototyp
 function DaggerArray()
 {
 	DaggerObject.apply(this);
-	Object.defineProperty(this, "length", {value: 0, enumerable: false});
+	//Object.defineProperty(this, "length", {value: 0, enumerable: false});
 	Object.defineProperty(this, "__added", {value: [], enumerable: false});
 	Object.defineProperty(this, "__removed", {value: [], enumerable: false});
 	Object.defineProperty(this, "__echo", {value: function DaggerArray__echo(event)
@@ -259,20 +255,30 @@ _daggerModel =
 		
 		var d = this._decl[name];
 		if(d == undefined)
-			throw new Error("Cannot set a value for a property name not described by the model for this datum.");
+			throw new Error("Cannot set a value for a property name ('" + name + "') not described by the model for this datum.");
 		
 		if(d.array)
 		{
-			if((!(value instanceof Array)) || (typeof(value[0]) != d.type))
+			if(!(value instanceof Array))	// || (typeof(value[0]) != d.type))
 				throw new Error("The model for this datum requires an array of " + d.type + "s for the '" + name + "' property.");
+
+			var v = new DaggerArray();
+			for(var i = 0; i < value.length; i++)
+				v.push((value instanceof d.model)? value[i] : new d.model(value[i]));
+			value = v;
 		}
 		else if(d.type == "model")
 		{
 			if(!(value instanceof d.model))
 				value = new d.model(value);		//construct it!
 		}
+		else if(d.type == "date")
+		{
+			if(!(value instanceof Date))
+				throw new Error("The model for this datum requires a Date value for this property.");
+		}
 		else if(typeof(value) != d.type)
-			throw new Error("The model for this datum requires a(n) " + d.type + " value for this property.");
+			throw new Error("The model for this datum requires a(n) " + d.type + " value for this property (" + typeof(value) + " provided).");
 		
 		this[name] = value;
 		var e = {value: value};
@@ -317,7 +323,8 @@ function DaggerDefineModel(decl, impl)
 	var d = _generateDecl(decl);
 	var proto = _.extend(_.clone(DaggerObject.prototype), _daggerModel, {_decl: (d.inner || d)}, impl);
 	Object.defineProperty(proto, "_decl", {value: proto._decl, enumerable: false});
-		
+	Object.defineProperty(proto, "_super", {value: {set: _daggerModel.set}, enumerable: false});
+
 	var ctor = function DaggerModel_ctor(state)
 	{
 		DaggerObject.call(this);
@@ -370,7 +377,7 @@ _daggerView =
 	init: function()
 	{
 		this.compile();
-		if(this.dataEvents)
+		if(this.dataEvents && this.data)
 			_.keys(this.dataEvents).forEach(function(k)
 			{
 				this.data.listen(k, this.dataEvents[k], this);
@@ -378,16 +385,26 @@ _daggerView =
 	},
 	deinit: function()
 	{
-		_.keys(this.dataEvents).forEach(function(k)
+		if(this.data)
 		{
-			this.data.ignore(k, this.dataEvents[k], this);
-		}.bind(this));
+			_.keys(this.dataEvents).forEach(function(k)
+			{
+				this.data.ignore(k, this.dataEvents[k], this);
+			}.bind(this));
+		}
+	},
+	setData: function(data)
+	{
+		this.deinit();
+		this.data = data;
+		this.init();
 	},
 	compile: function()
 	{
-		if(this.template.substr(0, 1) == "#")	//attach to an existing element in the DOM
+		if((this.template == undefined) || (this.template.substr(0, 1) == "#"))	//attach to an existing element in the DOM
 		{
-			this._hb = this.render;
+			this.$el = window.$(this.template);
+			this._hb = function(){};
 		}
 		else
 		{
@@ -399,24 +416,25 @@ _daggerView =
 	},
 	render: function()
 	{
-		if(!this._hb)
+		if(this._hb == undefined)
 		{
-			this.compile();
-			return(this.render());	//recurse because render() may be rebound
+			console.log(this);
+			throw new Error("derp");
 		}
 		var html = this._hb(this.data || {});
-		if(this.$el)	this.$el.html(html);
-		else			this._$hbs.after(this.$el = window.$(html));
+		if(this.$el.length > 0)	this.$el.html(html);
+		else					this._$hbs.after(this.$el = window.$(html));
 	}
 };
 function DaggerDefineView(impl)
 {
-	var proto = _.extend(_.clone(_daggerView), impl, {_super: _daggerView.init});
+	var proto = _.extend(_.clone(_daggerView), impl, {_super: _daggerView});
 	var ctor = function(data)
 	{
-		if(!(this.data = data))
-			throw new Error("You must instantiate a view with an array of data to back it.");
-		
+		//if(!(this.data = data))
+		//	throw new Error("You must instantiate a view with an array of data to back it.");
+		this.data = data;
+		this.$el = window.$();
 		this.init.apply(this, arguments);
 	};
 	ctor.prototype = proto;
@@ -470,9 +488,9 @@ Dagger =
 	DefineHelpers: DaggerDefineHelpers
 };
 
-module.exports = Dagger;
+//return(Dagger);
 
-})();
+//});
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

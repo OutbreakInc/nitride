@@ -29,8 +29,15 @@ body
 .ace_gutter-cell.ace_breakpoint
 { 
     border-radius: 20px 0px 0px 20px; 
-    box-shadow: 0px 0px 1px 1px red inset; 
+    background: rgba(255, 117, 24, 0.5);
 } 
+
+.ide-line-error
+{
+	background-color: rgba(255, 117, 24, 0.5);
+	position: absolute;
+	z-index: 5;
+}
 
 .topbarContainer
 {
@@ -68,15 +75,85 @@ body
 	height: 100%;
 	width: 200px;
 	right: 0px;
+	box-shadow: -3px 0 15px rgba(0, 0, 0, 0.2);
 }
 
-.sidebar hr
+.sidebarScroll
 {
-	margin: 0px;
-	border-top: 1px solid #888;
-	border-bottom: 1px solid #222;
+	height: 100%;
+	overflow: scroll;
+	position: absolute;
 }
 
+.sidebar .noscroll
+{
+	position: absolute;
+	height: auto;
+	width: 100%;
+	background-color: #e8e8e8;
+	box-shadow: 0px 3px 15px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar .scroll
+{
+	margin-top: 40px;
+	background-color: white;
+}
+
+.controlButtons
+{
+	padding: 5px 3px 5px 3px;
+}
+.sidebarHeader
+{
+	padding: 0px 3px 0px 3px;
+	background: linear-gradient(to bottom, rgba(200,200,200,1) 0%,rgba(235,235,235,1) 7%,rgba(208,208,208,1) 100%);
+	border-top: #999 1px solid;
+	border-bottom: rgb(134, 134, 134) 1px solid;
+}
+
+.sidebarSection
+{
+	padding: 0px 3px 6px 3px;
+	border-bottom: rgb(185, 185, 185) 1px solid;
+}
+
+.callStack li
+{
+	padding-left: 12px;
+}
+
+.callStack .selected
+{
+	background-image: url("../yui-2.9.0/treeview-loading.gif");
+	background-position: left center;
+	background-repeat: no-repeat;
+}
+
+.callStack li.odd
+{
+	background-color: #fff;
+}
+
+.callStack li.even
+{
+	background-color: #f0f0f0;
+}
+
+ul.dropdown-menu li.selected
+{
+	background: #AAA url(data:image/gif;base64,R0lGODlhEAAQAMQAAORHHOVSKudfOulrSOp3WOyDZu6QdvCchPGolfO0o/XBs/fNwfjZ0frl3/zy7////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAkAABAALAAAAAAQABAAAAVVICSOZGlCQAosJ6mu7fiyZeKqNKToQGDsM8hBADgUXoGAiqhSvp5QAnQKGIgUhwFUYLCVDFCrKUE1lBavAViFIDlTImbKC5Gm2hB0SlBCBMQiB0UjIQA7) center left no-repeat;
+}
+
+ul.dropdown-menu li.selected a
+{
+	color: #fff;
+}
+
+ul.dropdown-menu li.selected :hover
+{
+	background: #888 url(data:image/gif;base64,R0lGODlhEAAQAMQAAORHHOVSKudfOulrSOp3WOyDZu6QdvCchPGolfO0o/XBs/fNwfjZ0frl3/zy7////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAkAABAALAAAAAAQABAAAAVVICSOZGlCQAosJ6mu7fiyZeKqNKToQGDsM8hBADgUXoGAiqhSvp5QAnQKGIgUhwFUYLCVDFCrKUE1lBavAViFIDlTImbKC5Gm2hB0SlBCBMQiB0UjIQA7) center left no-repeat;
+}
 
 /*
 img.outbreakIDELogo

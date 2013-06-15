@@ -10111,25 +10111,52 @@ var UndoManager = function() {
 
 (function() {
 
+    this._isAdjacent = function(l, n)
+    {
+        var le, ns;
+        switch(l.action)
+        {
+        case "insertText":  le = l.range.end.clone();   break;
+        case "removeText":  le = l.range.start.clone(); break;
+        default:            return(false);
+        }
+        switch(n.action)
+        {
+        case "insertText":  ns = n.range.start.clone(); break;
+        case "removeText":  ns = n.range.end.clone();   break;
+        default:            return(false);
+        }
+
+        return(le.equals(ns));
+    };
+
     this._merge = function(lastEdit, newEdit)
     {
-        if((lastEdit.range.end.row != newEdit.range.start.row) || (lastEdit.range.start.row != newEdit.range.end.row))
+        var l = lastEdit[lastEdit.length - 1].deltas;
+        l = l[l.length - 1];
+        var n = newEdit[0].deltas[0];
+
+        console.log("insert - last: ", lastEdit, " new: ", newEdit);
+        if(!this._isAdjacent(l, n))
             return(false);
-        switch(lastEdit.action)
+
+        switch(n.action)
         {
         case "insertText":
-            if(lastEdit.range.end.column == newEdit.range.start.column)
+            console.log("insert - last: ", lastEdit, " new: ", newEdit);
+            if(l.range.end.column == n.range.start.column)
             {
-                lastEdit.text += newEdit.text;
-                lastEdit.range.end.column = newEdit.range.end.column;
+                while(newEdit.length > 0)
+                    lastEdit.push(newEdit.shift());
                 return(true);
             }
             break;
         case "removeText":
-            if(lastEdit.range.start.column == newEdit.range.end.column)
+            console.log("remove - last: ", lastEdit, " new: ", newEdit);
+            if(l.range.end.column == n.range.end.column)
             {
-                lastEdit.text = newEdit.text + lastEdit.text;
-                lastEdit.range.start.column = newEdit.range.start.column;
+                while(newEdit.length > 0)
+                    lastEdit.push(newEdit.shift());
                 return(true);
             }
             break;
@@ -10142,8 +10169,8 @@ var UndoManager = function() {
         this.$doc  = options.args[1];
         var now = Date.now();
         var lastAction;
-        if( (this.$undoStack.length > 0) && ((lastAction = this.$undoStack[this.$undoStack.length - 1]).timestamp  > (now - 10000))
-            && this._merge(lastAction[0].deltas[0], deltas[0].deltas[0]))
+        if( (this.$undoStack.length > 0) && ((lastAction = this.$undoStack[this.$undoStack.length - 1]).timestamp > (now - 2000))
+            && this._merge(lastAction, deltas))
         {
             lastAction.timestamp = now;
         }
