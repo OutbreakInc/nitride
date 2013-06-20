@@ -37,10 +37,7 @@
 					<li><a href="{{this.href}}">{{this.title}}</a></li>
 					{{/projects}}
 					</script>
-					<li class="divider-vertical"></li>
-					<li class="active"><a href="#/main.cpp">main.cpp</a></li>
-					<li><a href="#/GalagoAPI.cpp">GalagoAPI.cpp</a></li>
-					<li><a href="#/GalagoAPI.h">GalagoAPI.h</a></li>
+					<li class="tabstart divider-vertical"></li>
 				</ul>
 				
 				<ul id="settings" class="nav pull-right">
@@ -121,7 +118,7 @@
 	
 	<div id="editor" class="editorView">
 		<div class="leftColumn">
-			<div class="documentView"></div>
+			<div id="aceView" class="documentView"></div>
 		</div>
 		<div class="sidebar">
 			<div class="sidebarScroll">
@@ -132,15 +129,12 @@
 						</div>
 						<div class="sidebarSection">
 							<ul id="stack" class="callStack">
-								<li class="odd">Galago::IO::SPI::write</li>
-								<li class="even selected">Galago::IO::SPI::read</li>
-								<li class="odd">main</li>
 							</ul>
 						</div>
 					</li>
 					<li>
 						<div class="sidebarHeader">
-							Locals
+							Arguments &amp; Locals
 						</div>
 						<div class="sidebarSection yui-skin-sam">
 							<div id="varTree">
@@ -151,10 +145,10 @@
 			</div>
 			<ul class="noscroll">
 				<li class="controlButtons">
-					<button class="btn">V</button>
-					<button class="btn">D</button>
-					<button class="btn">P</button>
-					<button class="btn">X</button>
+					<button class="btn disabled">Verify</button>
+					<button class="btn">Continue</button>
+					<button class="btn disabled">Pause</button>
+					<button class="btn">Stop</button>
 				</li>
 			</ul>
 		</div>
@@ -169,8 +163,9 @@
 	<script src="static/handlebars-1.0.0-rc.3/handlebars-1.0.0-rc.3.min.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/bootstrap-2.3.1/bootstrap-2.3.1.min.js" type="application/javascript" charset="utf-8"></script>
 	
-	<script src="static/ace-custom/ace.js" type="application/javascript" charset="utf-8"></script>
-	<script src="static/ace-custom/mode-c_cpp.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/ace-774098f2/ace.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/ace-774098f2/mode-c_cpp.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/ace-774098f2/theme-xcode.js" type="application/javascript" charset="utf-8"></script>
 
 	<script src="static/yui-2.9.0/yahoo-dom-event.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/yui-2.9.0/treeview-min.js" type="application/javascript" charset="utf-8"></script>

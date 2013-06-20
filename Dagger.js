@@ -126,12 +126,14 @@ DaggerObject.prototype =
 	},
 	ignore: function DaggerObject_ignore(eventName, callback, context)
 	{
-		var idx;
-		(this.__listeners[eventName] || []).some(function(o, i){
-			if((o.callback == callback) && (o.context == o.context))
-			{idx = i; return(true);}
-		});
-		if(idx >= 0) this.__listeners[eventName][idx].splice(idx, 1);
+		var l = this.__listeners[eventName];
+		if(l)
+			for(var i = 0; i < l.length; i++)
+			{
+				var o = l[i];
+				if((l[i].callback == callback) && ((context == undefined) || (context == l[i].context)))
+				l.splice(i--, 1);
+			}
 	},
 	trigger: function DaggerObject_trigger(event)
 	{
@@ -152,8 +154,13 @@ function DaggerObject()
 	Object.defineProperty(this, "__uid", {value: DaggerEventCore.__nextUID++, enumerable: false});
 	Object.defineProperty(this, "__callQueuedListeners", {value: function __callQueuedListeners()
 		{
-			var queue = this.__eventQueue;
-			this.__eventQueue = {};
+			var queue = {};
+			
+			for(var k in this.__eventQueue)
+			{
+				queue[k] = this.__eventQueue[k];
+				delete this.__eventQueue[k];
+			}
 
 			_.values(queue).forEach(function(queuedEvent)
 			{
