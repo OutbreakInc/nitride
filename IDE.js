@@ -273,7 +273,8 @@ File.prototype = _.extend(new Dagger.Object(),
 
 	close: function File_close()
 	{
-		this.save(true);
+		if(this.needsSave)
+			this.save(true);
 		if(this.document != undefined)
 			this.document.removeEventListener("changed", this._onChangeListener);
 	},
@@ -312,7 +313,7 @@ File.prototype = _.extend(new Dagger.Object(),
 		if(this._saveTimer)
 			clearTimeout(this._saveTimer);
 
-		if(this.force)
+		if(force)
 			this._doSave();
 		else
 			this._saveTimer = setTimeout(function()	//don't save until after shortly after the last call
@@ -328,7 +329,7 @@ File.prototype = _.extend(new Dagger.Object(),
 
 		this.needsSave = false;
 
-		console.log("will save now.");
+		console.log("will save '" + this.path + "' now.");
 		fs.writeFile(this.path, this.contents, {encoding: "utf8"})
 	}
 });
@@ -404,29 +405,73 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 		}
 	},
 	
+	setReadOnly: function EditorView_setReadOnly(readOnly)
+	{
+		this.editor.setReadOnly(readOnly);
+	},
 	getScrollOffset: function EditorView_getScrollOffset()
 	{
-		;
+		return(this.editor.getSession().getScrollTop());
+	},
+	setScrollOffset: function EditorView_setScrollOffset(offset)
+	{
+		this.editor.getSession().setScrollTop(offset);
 	},
 	jumpToLine: function EditorView_jumpToLine(lineNumber)
 	{
 		this.editor.scrollToLine(lineNumber, true);
 	},
 	
-	highlightStoppedLine: function EditorView_highlightStoppedLine(lineNumber, scrollTo)
+	addAnnotation: function EditorView_addAnnotation(file, line, type)
 	{
-		if((lineNumber == undefined) || (this.stoppedMarker != undefined))
+		//ensure same file
+		if(file != this.file.path)
+			return;
+		
+		var gutter = false;
+		switch(type)
 		{
-			//remove
-			this.editor.getSession().removeMarker(this.stoppedMarker);
-			this.stoppedMarker = undefined;
+		case "breakpoint":				style = "ace_breakpoint";	gutter = true;	break;
+		case "breakpointUnconfirmed":	style = "ace_breakpoint_unconfirmed";	gutter = true;	break;
+		case "error":					style = "ide-line-error";	break;
+		case "warning":					style = "ide-line-warning";	break;
+		case "stopped":					style = "ide-line-stopped";	break;
+		case "caller":					style = "ide-line-stopped-caller";	break;
 		}
+		
+		if(gutter)
+		{
+			this.editor.session.setBreakpoint(line - 1, style);
+		}
+		else
+		{
+			this.editor.getSession().removeMarker(this.markers[line]);
+			this.markers[line] = this.editor.getSession().addMarker(new AceRange(line - 1, 0, line, 0), style, "background");
+		}
+	},
+	removeAnnotation: function EditorView_removeAnnotation(file, line, type)
+	{
+		//ensure same file
+		if(file != this.file.path)
+			return;
 
-		var range = new AceRange(lineNumber - 1, 0, lineNumber, 0);
-		this.stoppedMarker = this.editor.getSession().addMarker(range, "ide-line-error", "background");
-
-		if(scrollTo)
-			this.jumpToLine(lineNumber);
+		switch(type)
+		{
+		case "breakpoint":
+		case "breakpointUnconfirmed":
+			this.editor.session.clearBreakpoint(line - 1);
+			break;
+		case "error":
+		case "warning":
+		case "stopped":
+		case "caller":
+			if(this.markers[line] != undefined)
+			{
+				this.editor.getSession().removeMarker(this.markers[line]);
+				delete this.markers[line];
+			}
+			break;
+		}
 	},
 
 	//clicking in the gutter requests a breakpoint, and an unrealized breakpoint is displayed.
@@ -436,38 +481,36 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 	{
 		var target = event.domEvent.target;
 			
-		if(target.className.indexOf("ace_gutter-cell") == -1) 
-			return; 
-		//if(!event.editor.isFocused()) 
-		//	return; 
-		if(event.clientX > 25 + target.getBoundingClientRect().left) 
-			return; 
+		if(!$(target).hasClass("ace_gutter-cell"))
+			return;
+		//if(!event.editor.isFocused())
+		//	return;
+		if(event.clientX > 25 + target.getBoundingClientRect().left)
+			return;
 
 		var row = event.getDocumentPosition().row;
 
 		// rows are zero-indexed, lines are not
-		var line = row + 1;	
+		var line = row + 1;
 		
-		if(this.breakpoints[row]) 
+		/*
+		if(this.breakpoints[line])
+			this.removeBreakpoint(this.file.path, line);
+		else
 		{
-			this.editor.session.clearBreakpoint(row);
-			delete this.breakpoints[row];
-			this.trigger(new Dagger.Event(this, "removeBreakpoint", {file: this.file.path, line: line}));
-		}
-		else 
-		{
-			this.editor.session.setBreakpoint(row);
-			this.breakpoints[row] = true;
-			this.trigger(new Dagger.Event(this, "addBreakpoint", {file: this.file.path, line: line}));
-		}
+			this.editor.session.setBreakpoint(row, "ace_breakpoint_unconfirmed");
+			this.breakpoints[line] = true;
+		*/
 		
+		this.trigger(new Dagger.Event(this, "toggleBreakpoint", {path: this.file.path, line: line}));
+
 		event.stop();
 	},
 });
 function EditorView(selector)
 {
 	Dagger.Object.call(this);
-	this.breakpoints = {};
+	this.markers = {};
 
 	this.onToggleBreakpoint = this.onToggleBreakpoint.bind(this);
 	
@@ -498,8 +541,8 @@ TabView.prototype = _.extend(new Dagger.Object(),
 			//didn't find one, so create a new tab
 			$f = $("<li/>");
 			$f.html('<a href="#' + event.path + '">' + event.path.split("/").pop() + '</a>');
-			$f.attr("data-path", event.path);
 			$f.addClass("active");
+			$f.attr("data-path", event.path);
 			$f.insertAfter(this.$el.children(".tabstart"));
 			this.$currentSelection = $f;
 		}
@@ -522,11 +565,13 @@ TabView.prototype = _.extend(new Dagger.Object(),
 
 	_onTabClicked: function TabView__onTabClicked(event)
 	{
-		console.log("clicked on: ", event);
-		var $tab = $();
+		var $tab = $(event.target);
 
-		//confirm it's an li element
-		this.trigger(new Dagger.Event(this, "selected", {path: $tab.attr("data-path")}));
+		var path = $tab.attr("href");
+		if(path)
+			this.trigger(new Dagger.Event(this, "selected", {path: path.substr(1)}));
+
+		return(false);	//no browser navigation
 	},
 
 	$el: null,
@@ -544,6 +589,8 @@ function TabView(selector, fileManager)
 	this.fileManager.listen("navigated", this._onFileSelected, this);
 }
 
+
+
 // FileManager
 
 FileManager.prototype = _.extend(new Dagger.Object(),
@@ -551,25 +598,31 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	setEditor: function FileManager_setEditor(editor)
 	{
 		this.editor = editor;
+
+		this.editor.listen("toggleBreakpoint", this.onBreakpointRequested, this);
 	},
 
-	//line and highlightStoppedPoint are optional
-	navigate: function FileManager_navigate(path, line, highlightStoppedPoint)
+	//line is optional
+	navigate: function FileManager_navigate(path, line)
 	{
 		var f;
+		
 		if(path != this.currentPath)
 		{
+			if(this.currentPath)
+			{
+				this.removeAnnotations();
+
+				this.filesByPath[this.currentPath].lastOffset = this.editor.getScrollOffset();
+			}
+
 			this.editor.close();
 
 			f = this.filesByPath[this.currentPath = path];
-			if(f == undefined)
+			if(f == undefined)	//the file isn't open yet
 			{
-				f = this.filesByPath[this.currentPath] =
-				{
-					path: path,
-					lastOffset: 0,	//updated below
-					lastAccessed: Date.now()
-				};
+				f = this.insertFile(this.currentPath);
+
 				this.filesByLRU.unshift(f);
 			}
 			else
@@ -581,29 +634,163 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 				this.filesByLRU.unshift(f);
 			}
 			this.editor.open(f.path);
-		}
-		else
-			f = this.filesByPath[this.currentPath];
-
-		if(line != undefined)
-		{
+			
 			this.editor.listen("opened", function()
 			{
 				this.editor.ignore("opened", arguments.callee);
-				this.editor.jumpToLine(f.lastOffset = line);
-				if(highlightStoppedPoint)
-					this.editor.highlightStoppedLine(line);
+				
+				this.editor.setScrollOffset(f.lastOffset);
+
+				this.restoreAnnotations();
+
+				if(line != undefined)
+					this.editor.jumpToLine(line);
 			}, this);
+		}
+		else
+		{
+			f = this.filesByPath[this.currentPath];
+
+			if(line != undefined)
+				this.editor.jumpToLine(line);
+			
+			this.restoreAnnotations();
 		}
 
 		this.trigger(new Dagger.Event(this, "navigated", {path: this.currentPath}));
 		this.trigger(new Dagger.Event(this, "changed"));
 	},
 
+	insertFile: function FileManager_insertFile(path, creationProperties)
+	{
+		if(this.filesByPath[path] != undefined)
+			return(this.filesByPath[path]);
+
+		return(this.filesByPath[path] = _.extend(
+		{
+			path: path,
+			lastOffset: 0,
+			lastAccessed: Date.now(),
+			breakpoints: {},	//annotation in the gutter, keyed by unique line
+			highlights: {}		//annotation in the text body, keyed by unique line
+		}, creationProperties));
+	},
+
+	restoreAnnotations: function FileManager_restoreAnnotations()
+	{
+		var path = this.currentPath;
+
+		for(var line in this.filesByPath[path].breakpoints)
+			this.editor.addAnnotation(path, line, this.filesByPath[path].breakpoints[line]);
+
+		for(var line in this.filesByPath[path].highlights)
+		{
+			var highlights = this.filesByPath[path].highlights[line];
+			for(var i = 0; i < highlights.length; i++)
+				this.editor.addAnnotation(path, line, highlights[i].type);
+		}
+	},
+	removeAnnotations: function FileManager_removeAnnotations()
+	{
+		var path = this.currentPath;
+		
+		for(var line in this.filesByPath[path].breakpoints)
+			this.editor.removeAnnotation(path, line, this.filesByPath[path].breakpoints[line]);
+
+		for(var line in this.filesByPath[path].highlights)
+		{
+			var highlights = this.filesByPath[path].highlights[line];
+			for(var i = 0; i < highlights.length; i++)
+				this.editor.removeAnnotation(path, line, highlights[i].type);
+		}
+	},
+
+	addBreakpoint: function FileManager_addBreakpoint(path, line, type)
+	{
+		var f = this.insertFile(path, {hidden: true});
+
+		type = type || "breakpoint";
+		f.breakpoints[line] = type;
+
+		if(path == this.currentPath)
+			this.editor.addAnnotation(path, line, type);
+	},
+	removeBreakpoint: function FileManager_removeBreakpoint(path, line)
+	{
+		var f = this.insertFile(path, {hidden: true});
+
+		delete f.breakpoints[line];
+
+		if(path == this.currentPath)
+			this.editor.removeAnnotation(path, line, "breakpoint");
+	},
+	//type may be "caller" (callstack frame != 0) or "stopped" (callstack frame 0)
+	addStackpoint: function FileManager_addStackpoint(path, line, type)
+	{
+		var f = this.insertFile(path, {hidden: true});
+
+		(f.highlights[line] || (f.highlights[line] = [])).push({type: type});
+		
+		if(path == this.currentPath)
+			this.editor.addAnnotation(path, line, type);
+	},
+	removeStackpoint: function FileManager_removeStackpoint(path, line)
+	{
+		var ths = this;
+		var eachLine = function(path, line, highlights)
+		{
+			for(var i = 0; i < highlights.length; i++)
+			{
+				var type = highlights[i].type;
+				if((type == "caller") || (type == "stopped"))
+					highlights.splice(i, 1);
+				if(path == ths.currentPath)
+					ths.editor.removeAnnotation(path, line, type);
+			}
+		};
+		var eachPath = function(path, highlights)
+		{
+			if(line != undefined)
+			{
+				if(highlights[line])
+					eachLine(path, line, highlights[line]);
+			}
+			else
+				for(var l in highlights)
+					eachLine(path, l, highlights[l]);
+		}
+
+		if(path != undefined)
+		{
+			if(this.filesByPath[path])
+				eachPath(path, this.filesByPath[path].highlights);
+		}
+		else
+			for(var p in this.filesByPath)
+				eachPath(p, this.filesByPath[p].highlights);
+	},
+
+	onBreakpointRequested: function FileManager_onBreakpointRequested(event)
+	{
+		if(event.path != this.currentPath)
+			return;
+
+		var f = this.insertFile(event.path);
+
+		if(f.breakpoints[event.line] == undefined)
+		{
+			this.addBreakpoint(event.path, event.line, "breakpointUnconfirmed");
+			this.trigger(new Dagger.Event(this, "addBreakpoint", {path: event.path, line: event.line}));
+		}
+		else
+			this.trigger(new Dagger.Event(this, "removeBreakpoint", {path: event.path, line: event.line}));
+	},
+
 	editor: null,
 	currentPath: null,
 	filesByPath: null,
 	filesByLRU: null,
+	stoppedPoint: null,
 });
 function FileManager(editor)
 {
@@ -645,7 +832,7 @@ VarView.prototype =
 	{
 		var v = "<strong>" + variable.name + "</strong> "
 
-		if(variable.value !== undefined)
+		if((variable.value !== undefined) && (variable.type !== undefined))
 			v += this.formatValue(variable.value, variable.type && (variable.type.indexOf("*") >= 0));
 
 		return(variable.type? (v + " <em>(" + variable.type + ")</em>") : v);
@@ -745,8 +932,6 @@ function VarView(selector, deferredEvaluator)
 }
 
 
-var varView = new VarView("#varTree");
-
 //test data
 /*var vars =
 [
@@ -771,7 +956,7 @@ var varView = new VarView("#varTree");
 
 
 
-StackView.prototype =
+StackView.prototype = _.extend(new Dagger.Object(),
 {
 	$el: null,
 
@@ -781,32 +966,37 @@ StackView.prototype =
 
 		this.data = data;
 
-		for(var i = 0; i < data.length; i++)
-		{
-			$line = $("<li/>");
-			$line.html(data[i].func);
-			$line.addClass((i & 1)? "odd" : "even");
-			if(i == 0)
-				$line.addClass("selected");
-			$line.attr("data-frame", i);
-			this.$el.append($line);
-		}
+		if(data != undefined)
+			for(var i = 0; i < data.length; i++)
+			{
+				$line = $("<li/>");
+				$line.html(data[i].func);
+				$line.addClass((i & 1)? "odd" : "even");
+				$line.attr("data-frame", i);
+				this.$el.append($line);
+			}
 	},
 	clear: function StackView_clear()
 	{
 		this.$el.html("");
 		this.$el.click(this._onFrameSelect.bind(this))
 	},
-
-	_onFrameSelect: function StackView_onFrameSelect(e)
+	setSelected: function StackView_setSelected(index)
 	{
-		$e = $(e);
+		this.$el.children().removeClass("selected").filter('[data-frame="' + index + '"]').addClass("selected");
+	},
 
-		var frameNum = $e.attr("data-frame");
+	_onFrameSelect: function StackView_onFrameSelect(event)
+	{
+		$f = $(event.target);
+
+		var frameNum = $f.attr("data-frame");
 
 		console.log("frame " + frameNum + " selected.");
+
+		this.trigger(new Dagger.Event(this, "selected", {frame: frameNum}));
 	}
-};
+});
 function StackView(selector)
 {
 	/*<li class="odd">Galago::IO::SPI::write</li>
@@ -815,11 +1005,6 @@ function StackView(selector)
 
 	this.$el = $(selector);
 }
-
-var stackView = new StackView("#stack");
-
-//stackView.setData(["Galago::IO::SPI::write", "Galago::IO::SPI::read", "main"]);	//@@test
-
 
 
 
@@ -878,80 +1063,463 @@ var stackView = new StackView("#stack");
 
 
 
-
-
-
-
-
-var editor = new EditorView("#aceView");
-//editor.open("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp");
-
-var fileManager = new FileManager(editor);
-
-var tabs = new TabView("#tabs", fileManager);
-
-tabs.listen("select", function(e)
+Button.prototype = _.extend(new Dagger.Object(),
 {
-	fileManager.navigate(e.path);
-});
-
-var codeTalker = new CodeTalker.CodeTalker("/Users/kuy/Projects/Galago/galago-ide/SDK/bin/arm-elf-gdb", ["--interpreter=mi2", "/Users/kuy/Projects/Galago/ide/ardbeg/testProject/module.elf"]);
-
-codeTalker.listen("runstate", function(status)
-{
-	switch(status.state)
+	setTitle: function Button_setTitle(title)
 	{
-	case "stopped":
-		console.log(">>> UI set for stopped mode <<< ");
-		
-		//highlight the stopped line
-		//editor.highlightStoppedLine(10);
-		fileManager.navigate(status.reason.frame.file, status.reason.frame.line, true);
-		
-		codeTalker.updateCallstack(function(err)
+		this.$el.html(title);
+		return(this);
+	},
+	setAction: function Button_setAction(action)
+	{
+		this.action = action;
+		if(action === false)	this.$el.addClass("disabled");
+		else					this.$el.removeClass("disabled");
+		return(this);
+	},
+	setEnabled: function Button_setEnabled(enabled)
+	{
+		if(enabled && (this.action !== false))	this.$el.removeClass("disabled");
+		else									this.$el.addClass("disabled");
+	},
+
+	_onClick: function Button__onClick(event)
+	{
+		if(this.action !== false)
+			this.trigger(new Dagger.Event(this, "action", {action: this.action}));
+	},
+
+	$el: null,
+	action: null
+});
+function Button(selector)
+{
+	Dagger.Object.call(this);
+	this.$el = $(selector);
+	this.$el.click(this._onClick.bind(this));
+}
+
+
+
+
+
+
+IDE.prototype = _.extend(new Dagger.Object(),
+{
+	init: function IDE_init()
+	{
+		this.editor = new EditorView("#aceView");
+		//editor.open("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp");
+
+		this.fileManager = new FileManager(this.editor);
+
+		this.tabs = new TabView("#tabs", this.fileManager);
+
+
+		this.stackView = new StackView("#stack");
+		this.varView = new VarView("#varTree");
+
+		this.verifyRestartButton = new Button("#verifyRestart");
+		this.runContinueButton = new Button("#runContinue");
+		this.debugPauseButton = new Button("#debugPause");
+		this.stopButton = new Button("#stop");
+
+		this.codeTalker = new CodeTalker.CodeTalker("/Users/kuy/Projects/Galago/galago-ide/SDK/bin/arm-elf-gdb", ["--interpreter=mi2", "/Users/kuy/test/module.elf"]);
+
+		this.tabs.listen("selected", function(e)
 		{
-			//update UI
-			stackView.setData(codeTalker.getStack());
-		});
+			this.fileManager.navigate(e.path);
+		}, this);
 
-		codeTalker.updateVars(function(err)
+		this.stackView.listen("selected", this.onFrameChange, this);
+
+		this.codeTalker.listen("runstate", function(status)
 		{
-			//update UI
-			varView.setData(codeTalker.getVars());
-		});
-		
-		break;
-	case "running":
-		console.log(">>> UI set for run mode <<<");
-		break;
-	}
-});
+			switch(status.state)
+			{
+			case "stopped":
+				console.log(">>> UI set for stopped mode <<<: ", status);
+				
+				this.codeTalker.updateCallstack(function(err)
+				{
+					if(err)
+						return;
 
-codeTalker.listen("breakpointsChanged", function(breakpoints)
+					//update the callstack
+					var callstack = this.codeTalker.getStack();
+					this.stackView.setData(callstack);
+					
+					//create annotations for the whole callstack
+					for(var i = 0; i < callstack.length; i++)
+						this.fileManager.addStackpoint(		callstack[i].path,
+															callstack[i].line,
+															(callstack[i].level == 0)? "stopped" : "caller"
+														);
+
+					//jump to the stopped line
+					if(status.reason.frame != undefined)
+						this.fileManager.navigate(status.reason.frame.file, status.reason.frame.line);
+					else if((callstack.length > 0) && (callstack[0].path))
+						this.fileManager.navigate(callstack[0].path, callstack[0].line);
+					else
+						console.log("nowhere to go");
+
+					//update variables for that frame (also highlights the right frame in the stack view)
+					this.updateVarsForFrame();
+				}.bind(this));
+
+				this.setRunState(status.state);
+				break;
+			case "running":
+				console.log(">>> UI set for run mode <<<");
+
+				//remove all annotations for the last callstack
+				this.stackView.setData();
+				this.fileManager.removeStackpoint();
+
+				this.setRunState(status.state);
+				break;
+			}
+		}.bind(this));
+
+		this.codeTalker.listen("breakpointsChanged", function(breakpoints)
+		{
+
+		}.bind(this));
+
+		/*this.codeTalker.connect(1034, function(err)
+		{
+			;
+		});*/
+
+		this.varView.setDeferredEvaluator(this.codeTalker.dereferenceVar.bind(this.codeTalker));
+
+		this.fileManager.listen("addBreakpoint", function(event)
+		{
+			console.log(event);
+
+			//try to find a matching entry in breakpointTable
+			for(var i in this.breakpointTable)
+				if((this.breakpointTable[i].path == event.path) && (this.breakpointTable[i].line == event.line))
+					return;
+
+			this.codeTalker.setBreakpoint(event.path, event.line, function(error, breakpointNum)
+			{
+				if(error)
+					return(this.fileManager.removeBreakpoint(event.path, event.line));
+				
+				this.breakpointTable.push({path: event.path, line: event.line, num: breakpointNum});
+				console.log("add ok");
+				
+				//delayed by 500ms for demonstration purposes
+				setTimeout(function()
+				{
+					console.log("confirm ok");
+					this.fileManager.addBreakpoint(event.path, event.line, "breakpoint");
+				}.bind(this), 500);
+
+			}.bind(this));
+		}.bind(this));
+
+		this.fileManager.listen("removeBreakpoint", function(event)
+		{
+			console.log(event);
+			
+			//try to find a matching entry in breakpointTable
+			var breakpointIdx;
+			for(var i in this.breakpointTable)
+				if((this.breakpointTable[i].path == event.path) && (this.breakpointTable[i].line == event.line))
+				{
+					breakpointIdx = i;
+					break;
+				}
+			if(breakpointIdx == undefined)
+				return;
+
+			this.codeTalker.removeBreakpoint(this.breakpointTable[breakpointIdx].num, function(error)
+			{
+				if(error)
+					return;	//um?
+
+				this.breakpointTable.splice(breakpointIdx, 1);
+				this.fileManager.removeBreakpoint(event.path, event.line);
+
+				console.log("remove ok");
+			}.bind(this));
+		}.bind(this));
+
+		this.verifyRestartButton.listen("action", this.onButtonStateChange, this);
+		this.runContinueButton.listen("action", this.onButtonStateChange, this);
+		this.debugPauseButton.listen("action", this.onButtonStateChange, this);
+		this.stopButton.listen("action", this.onButtonStateChange, this);
+
+
+
+		//finally, enter the root state
+		this.setRunState("editing");
+
+		//@@demo
+		this.fileManager.navigate("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp", 20);
+	},
+
+	updateVarsForFrame: function IDE_updateVarsForFrame()
+	{
+		//a new frame has already been set if necessary, so simply refresh data
+		this.stackView.setSelected(this.codeTalker.getVarFrame());
+
+		this.codeTalker.updateVars(function(err)
+		{
+			this.varView.setData(this.codeTalker.getVars());		//update UI
+		}.bind(this));
+	},
+	setRunState: function IDE_setRunState(newRunState)
+	{
+		//passively (idempotently) respond to the state change and retain it
+
+		if(this.runState == newRunState)
+			return;
+
+		switch(newRunState)
+		{
+		case "running":
+		case "stopped":
+			$("#sidebarSections").children().hide().filter(".visibleDebug").show();
+			this.editor.setReadOnly(true);
+			
+			break;
+
+		case "editing":
+			$("#sidebarSections").children().hide().filter(".visibleEdit").show();
+			this.stackView.setData();
+			this.fileManager.removeStackpoint();
+			this.editor.setReadOnly(false);
+
+			break;
+		}
+		switch(newRunState)
+		{
+		case "editing":
+			this.verifyRestartButton.setTitle("\u221A").setAction("building");
+			this.runContinueButton.setTitle("&gt;").setAction("running");
+			this.debugPauseButton.setTitle("&gt;||").setAction("stopped");
+			this.stopButton.setTitle("X").setAction(false);
+			break;
+
+		case "building":
+			this.verifyRestartButton.setTitle("\u221A").setAction(false);
+			this.runContinueButton.setTitle("&gt;").setAction(false);
+			this.debugPauseButton.setTitle("&gt;||").setAction(false);
+			this.stopButton.setTitle("X").setAction("editing");
+			break;
+
+		case "running":
+			this.verifyRestartButton.setTitle("&lt;&lt;").setAction(false);
+			this.runContinueButton.setTitle("&gt;").setAction(false);
+			this.debugPauseButton.setTitle("||").setAction("stopped");
+			this.stopButton.setTitle("X").setAction("editing");
+			break;
+
+		case "stopped":
+			this.verifyRestartButton.setTitle("&lt;&lt;").setAction("restart");
+			this.runContinueButton.setTitle("&gt;").setAction("running");
+			this.debugPauseButton.setTitle("||").setAction(false);
+			this.stopButton.setTitle("X").setAction("editing");
+			break;
+		}
+		this.runState = newRunState;
+	},
+
+	onButtonStateChange: function IDE_onButtonStateChange(event)
+	{
+		//actively respond to user-initiated state changes
+
+		switch(event.action)
+		{
+		case "editing":
+			//if we're running or stopped, exit debugging mode
+			switch(this.runState)
+			{
+			case "running":
+			case "stopped":
+				this.setAllButtonsEnabled(false);
+				
+				this.codeTalker.disconnect(function(error)
+				{
+					//codetalker shouldn't report any further state changes
+					this.setRunState("editing");
+				}.bind(this));
+				break;
+			}
+			break;
+		case "building":
+			//only if we're in editing mode, build the project
+			if(this.runState == "editing")
+			{
+				this.setAllButtonsEnabled(false);
+				
+				//(simulated)
+				setTimeout(function()
+				{
+					//@@show build error highlights
+
+					this.setAllButtonsEnabled(true);
+				}.bind(this), 1000);
+			}
+			break;
+		case "restart":
+			//only if we're stopped, restart execution
+			if(this.runState == "stopped")
+			{
+				this.setAllButtonsEnabled(false);
+
+				this.codeTalker.restart(function(error)
+				{
+					if(error)
+					{
+						this.setAllButtonsEnabled(true);
+						console.log("Error: ", error);
+					}
+				}.bind(this));
+			}
+			break;
+		case "running":
+			//if we're stopped, continue
+			//if we're editing, connect gdb, flash and continue
+			if(this.runState == "stopped")
+			{
+				this.setAllButtonsEnabled(false);
+				
+				this.codeTalker.run(function(error)
+				{
+					if(error)
+					{
+						this.setAllButtonsEnabled(true);
+						console.log("Error: ", error);
+					}
+					//else codetalker signals the correct state transition automatically
+				}.bind(this));
+			}
+			else if(this.runState == "editing")
+			{
+				this.setAllButtonsEnabled(false);
+				
+				//@@determine the correct port from galagoServer
+				this.codeTalker.connect(1033, function(error)
+				{
+					if(error)
+					{
+						this.setAllButtonsEnabled(true);
+						console.log("Error: ", error);
+						return;
+					}
+					
+					//@@if the firmware is newer than the last image we installed
+					//  flash it
+
+					this.codeTalker.run(function(error)
+					{
+						if(error)
+						{
+							this.setRunState("stopped");
+							console.log("Error: ", error);
+						}
+						//else codetalker signals the correct state transition automatically
+					}.bind(this));
+				}.bind(this));
+			}
+			break;
+		case "stopped":
+			//if we're running, pause
+			//if we're editing, connect gdb, flash and stop at the beginning (default gdb behaviour)
+			if(this.runState == "running")
+			{
+				this.setAllButtonsEnabled(false);
+				
+				this.codeTalker.pause(function(error)
+				{
+					if(error)
+					{
+						this.setAllButtonsEnabled(true);
+						console.log("Error: ", error);
+					}
+					//else codetalker signals the correct state transition automatically
+				}.bind(this));
+			}
+			else if(this.runState == "editing")
+			{
+				this.setAllButtonsEnabled(false);
+				
+				//@@determine the correct port from galagoServer
+				this.codeTalker.connect(1033, function(error)
+				{
+					if(error)
+					{
+						this.setAllButtonsEnabled(true);
+						console.log("Error: ", error);
+					}
+					//else codetalker signals the correct state transition (to "stopped") automatically
+				}.bind(this));
+			}
+			break;
+		}
+	},
+	onFrameChange: function IDE_onFrameChange(event)
+	{
+		if(this.runState != "stopped")
+			return;
+
+		this.codeTalker.setVarFrame(event.frame, function(error)
+		{
+			if(error != undefined)
+				return;
+
+			this.updateVarsForFrame();
+			var callstack = this.codeTalker.getStack();
+			
+			if(callstack[event.frame].path)
+				this.fileManager.navigate(callstack[event.frame].path, callstack[event.frame].line);
+			else
+				console.log("can't resolve that frame");
+
+		}.bind(this));
+	},
+
+	setAllButtonsEnabled: function IDE_setAllButtonsEnabled(enabled)
+	{
+		this.verifyRestartButton.setEnabled(enabled);
+		this.runContinueButton.setEnabled(enabled);
+		this.debugPauseButton.setEnabled(enabled);
+		this.stopButton.setEnabled(enabled);
+	},
+
+	runState: null,
+	breakpointTable: null,
+
+	codeTalker: null,
+	
+	fileManager: null,
+	editor: null,
+	stackView: null,
+	varView: null,
+	tabs: null,
+
+	verifyRestartButton: null,
+	runContinueButton: null,
+	debugPauseButton: null,
+	stopButton: null
+});
+function IDE()
 {
-	editor.setBreakpoints();
-});
+	this.runState = null;
+	this.breakpointTable = [];
+}
 
-codeTalker.connect(1033, function(err)
+$(function()
 {
-	;
-});
+	window.ide = new IDE();
 
-varView.setDeferredEvaluator(codeTalker.dereferenceVar.bind(codeTalker));
-
-editor.listen("addBreakpoint", function(event)
-{
-	console.log(event);
-	codeTalker.setBreakpoint(event.file, event.line);
-});
-
-editor.listen("removeBreakpoint", function(event)
-{
-	console.log(event);
-	codeTalker.removeBreakpoint(event.file, event.line);
-});
-
-
+	window.ide.init();
+})
 
 
 /*

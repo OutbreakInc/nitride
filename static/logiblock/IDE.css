@@ -29,18 +29,44 @@ body
 .ace_gutter-cell.ace_breakpoint
 { 
 	border-radius: 20px 0px 0px 20px; 
-	border-color: rgba(255, 117, 24, 0.5);
+	background: rgba(255, 117, 24, 0.5);
 }
 
-.breakpoint_confirmed
+.ace_gutter-cell.ace_breakpoint_unconfirmed
 {
-	border-color: none;
-	background: rgba(255, 117, 24, 0.5);
+	border-radius: 20px 0px 0px 20px; 
+	/*border: 1px solid rgba(255, 117, 24, 0.5);
+	margin: -1px;*/
+	background-color: rgba(255, 117, 24, 0.2);
+	background-image: url("../yui-2.9.0/treeview-loading.gif");
+	background-position: left center;
+	background-repeat: no-repeat;
 }
 
 .ide-line-error
 {
+	background-color: rgba(255, 0, 0, 0.5);
+	position: absolute;
+	z-index: 5;
+}
+
+.ide-line-warning
+{
+	background-color: rgba(255, 255, 0, 0.5);
+	position: absolute;
+	z-index: 5;
+}
+
+.ide-line-stopped
+{
 	background-color: rgba(255, 117, 24, 0.5);
+	position: absolute;
+	z-index: 5;
+}
+
+.ide-line-stopped-caller
+{
+	background-color: rgba(255, 117, 24, 0.2);
 	position: absolute;
 	z-index: 5;
 }
@@ -127,12 +153,12 @@ body
 	border-bottom: rgb(185, 185, 185) 1px solid;
 }
 
-.callStack li
+#stack li
 {
 	padding-left: 12px;
 }
 
-.callStack .selected
+#stack .selected
 {
 	/*background-image: url("../yui-2.9.0/treeview-loading.gif");
 	background-position: left center;
@@ -140,21 +166,21 @@ body
 	font-weight: bold;
 }
 
-.callStack li
+#stack li
 {
 	white-space: nowrap;                     
 	overflow: hidden;
 	text-overflow: ellipsis;  
-	direction: rtl;
-	text-align: left;
+	/*direction: rtl;
+	text-align: left;*/
 }
 
-.callStack li.odd
+.listView li.odd
 {
 	background-color: #f0f0f0;
 }
 
-.callStack li.even
+.listView li.even
 {
 	background-color: #ffffff;
 }

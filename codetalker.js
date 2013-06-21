@@ -118,11 +118,40 @@ CodeTalker.prototype =
 
 	connect: function CodeTalker_connect(port, callback)
 	{
-		this.submit("-target-select remote localhost:" + port, function(taskContext)
+		var c = function()
 		{
-			if(taskContext.response == "connected")
+			//can't simply queue this because disconnecting flushes the queue
+			this.submit("-target-select remote localhost:" + port, function(taskContext)
 			{
-				this._connectedPort = port;
+				if(taskContext.response == "connected")
+				{
+					this._connectedPort = port;
+					callback();
+				}
+				else
+				{
+					console.log("connecting to the hardware failed!");
+					callback(new Error("Could not connect to the specified device"));
+				}
+			}.bind(this));
+		};
+
+		//disconnect first if necessary
+		if(this._connectedPort != undefined)
+			this.disconnect(function()
+			{
+				c.call(this);
+			}.bind(this));
+		else
+			c.call(this);
+	},
+	disconnect: function CodeTalker_disconnect(callback)
+	{
+		this.submit("-target-disconnect", function(taskContext)
+		{
+			if(taskContext.response == "done")
+			{
+				this.init();
 				callback();
 			}
 			else
@@ -131,10 +160,6 @@ CodeTalker.prototype =
 				callback(new Error("Could not connect to the specified device"));
 			}
 		}.bind(this));
-	},
-
-	build: function CodeTalker_build(callback)
-	{
 	},
 	
 	flash: function CodeTalker_flash(callback)
@@ -148,17 +173,21 @@ CodeTalker.prototype =
 		}.bind(this));
 	},
 	
-	restartRun: function CodeTalker_restartRun()
+	restart: function CodeTalker_restart(callback)
 	{
-		//1. pause
-		//2. set $pc = 0
-		//3. run
-	},
-	
-	restartPaused: function CodeTalker_restartPaused()
-	{
-		//1. pause
-		//2. set $pc = 0
+		this.dereferenceVar("$pc", function(error, args)
+		{
+			if(error == undefined)
+				this.submit("-var-assign $pc 0", function(taskContext)
+				{
+					if(taskContext.response == "done")
+						callback();
+					else
+						callback(new Error("Restart failed."));
+				}.bind(this));
+			else
+				callback(new Error("Restart failed."));
+		}.bind(this));
 	},
 	
 	setBreakpoint: function CodeTalker_setBreakpoint(file, line, callback)
@@ -181,24 +210,22 @@ CodeTalker.prototype =
 				callback(new Error("could not set the breakpoint."));
 		}.bind(this));
 	},
-	removeBreakpoint: function CodeTalker_removeBreakpoint(breakpointNum)
+	removeBreakpoint: function CodeTalker_removeBreakpoint(breakpointNum, callback)
 	{
 		if(this._runState != "stopped")
 			return(callback(new Error("can't remove breakpoints in the '" + this._runState + "' state.")));
 		
-		if(this._breakpoints[breakpoint.number] == undefined)
+		if(this._breakpoints[breakpointNum] == undefined)
 			return(callback(new Error("can't remove an unknown breakpoint")));
 
 		this.submit("-break-delete " + breakpointNum, function(taskContext)
 		{
 			if(taskContext.response == "done")
 			{
-				var breakpoint = taskContext.args.bkpt;
-
 				//remove the breakpoint from our breakpoint cache
-				this._breakpoints[breakpoint.number] = breakpoint;
+				delete this._breakpoints[breakpointNum];
 
-				callback(undefined, breakpoint.number);
+				callback(undefined, breakpointNum);
 			}
 			else
 				callback(new Error("could not set the breakpoint."));			
@@ -299,6 +326,10 @@ CodeTalker.prototype =
 		}.bind(this));
 	},
 
+	getVarFrame: function CodeTalker_getVarFrame()
+	{
+		return(this._lastFrameNum);
+	},
 	setVarFrame: function CodeTalker_setVarFrame(frameNum, callback)
 	{
 		if((this._runState != "stopped") || (this._lastCallstack == null))
@@ -566,7 +597,7 @@ CodeTalker.prototype =
 				//parse gdb output
 				if(r == "(gdb)")
 				{
-					if(this._tasks[0])
+					if(this._tasks.length > 0)
 						this._tasks[0].active = false;
 					else
 						console.log("ERROR >>>> prompt received for a task that has completed already!");
@@ -588,7 +619,7 @@ CodeTalker.prototype =
 					if(sym == "^")
 					{
 						//complete a command with this response
-						if(this._tasks[0])
+						if(this._tasks.length > 0)
 						{
 							this._tasks[0].response = command.substr(1);
 							this._tasks[0].args = args;
@@ -670,10 +701,28 @@ CodeTalker.prototype =
 			console.log("gdb ready.");
 		});
 	},
+	
+	//resets state when the connection to the gdb server is terminated, either intentionally or unexpectedly
+	init: function CodeTalker_init()
+	{
+		this._tasks = [];	//serves to arrest any ongoing tasks too
+
+		this._connectedPort = undefined;
+		this._runState = undefined;
+		this._statusCallback = undefined;
+		this._stopReason = undefined;
+
+		this._lastCallstack = null;
+		this._lastVars = null;
+		this._lastFrameNum = 0;
+		this._breakpoints = {};
+	},
+
 	quit: function CodeTalker_quit()
 	{
 		if(this._process != null)
 		{
+			this.init();
 			this._restartWhenDied = false;
 			this._process.kill();
 			this._process = null;
@@ -681,8 +730,8 @@ CodeTalker.prototype =
 	},
 	
 	_process: null,
-	_restartWhenDied: true,
-	_tasks: [],
+	_restartWhenDied: null,
+	_tasks: null,
 	_listeners: null,
 
 	//state:
@@ -694,14 +743,17 @@ CodeTalker.prototype =
 	_lastCallstack: null,
 	_lastVars: null,
 	_lastFrameNum: 0,
+	_breakpoints: null
 }
 function CodeTalker(processPath, processArgs)
 {
 	this._processPath = processPath;
 	this._processArgs = processArgs;
 
+	this._process = null;
+	this._restartWhenDied = true;
 	this._listeners = {};
-
+	this.init();
 	this.spawn();
 }
 

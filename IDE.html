@@ -122,17 +122,53 @@
 		</div>
 		<div class="sidebar">
 			<div class="sidebarScroll">
-				<ul class="scroll">
-					<li>
+				<ul id="sidebarSections" class="scroll">
+					<li class="visibleEdit visibleDebug">
+						<div class="sidebarHeader">
+							Breakpoints
+						</div>
+						<div class="sidebarSection">
+							<ul id="breakpoints" class="listView">
+							</ul>
+						</div>
+					</li>
+					<li class="visibleEdit">
+						<div class="sidebarHeader">
+							Devices
+						</div>
+						<div class="sidebarSection">
+							<ul id="devices" class="listView">
+							</ul>
+						</div>
+					</li>
+					<li class="visibleEdit">
+						<div class="sidebarHeader">
+							Modules
+						</div>
+						<div class="sidebarSection">
+							<ul id="modules" class="listView">
+							</ul>
+						</div>
+					</li>
+					<li class="visibleEdit">
+						<div class="sidebarHeader">
+							Problems
+						</div>
+						<div class="sidebarSection">
+							<ul id="modules" class="listView">
+							</ul>
+						</div>
+					</li>
+					<li class="visibleDebug">
 						<div class="sidebarHeader">
 							Callstack
 						</div>
 						<div class="sidebarSection">
-							<ul id="stack" class="callStack">
+							<ul id="stack" class="listView">
 							</ul>
 						</div>
 					</li>
-					<li>
+					<li class="visibleDebug">
 						<div class="sidebarHeader">
 							Arguments &amp; Locals
 						</div>
@@ -145,10 +181,10 @@
 			</div>
 			<ul class="noscroll">
 				<li class="controlButtons">
-					<button class="btn disabled">Verify</button>
-					<button class="btn">Continue</button>
-					<button class="btn disabled">Pause</button>
-					<button class="btn">Stop</button>
+					<button id="verifyRestart" class="btn"></button>
+					<button id="runContinue" class="btn"></button>
+					<button id="debugPause" class="btn"></button>
+					<button id="stop" class="btn"></button>
 				</li>
 			</ul>
 		</div>
