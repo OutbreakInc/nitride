@@ -12,7 +12,8 @@
 	},
 	"dependencies":
 	{
-		"moduleverse": ">0"
+		"moduleverse": ">=0.1.5",
+		"q": "0.9.6"
 	},
 	"devDependencies":
 	{

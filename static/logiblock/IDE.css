@@ -110,6 +110,7 @@ body
 	right: 0px;
 	border-left: 3px solid #b9b9b9;
 	box-shadow: -3px 0 15px rgba(0, 0, 0, 0.2);
+	z-index: 100;
 }
 
 .sidebarScroll
@@ -145,6 +146,7 @@ body
 	background: linear-gradient(to bottom, rgba(200,200,200,1) 0%,rgba(235,235,235,1) 7%,rgba(208,208,208,1) 100%);
 	border-top: #999 1px solid;
 	border-bottom: rgb(134, 134, 134) 1px solid;
+	cursor: default;
 }
 
 .sidebarSection
@@ -153,12 +155,13 @@ body
 	border-bottom: rgb(185, 185, 185) 1px solid;
 }
 
-#stack li
+.listView li
 {
 	padding-left: 12px;
+	cursor: pointer;
 }
 
-#stack .selected
+.listView .selected
 {
 	/*background-image: url("../yui-2.9.0/treeview-loading.gif");
 	background-position: left center;
@@ -166,7 +169,7 @@ body
 	font-weight: bold;
 }
 
-#stack li
+.listView li
 {
 	white-space: nowrap;                     
 	overflow: hidden;
@@ -198,6 +201,17 @@ ul.dropdown-menu li.selected a
 ul.dropdown-menu li.selected :hover
 {
 	background: #888 url(data:image/gif;base64,R0lGODlhEAAQAMQAAORHHOVSKudfOulrSOp3WOyDZu6QdvCchPGolfO0o/XBs/fNwfjZ0frl3/zy7////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAkAABAALAAAAAAQABAAAAVVICSOZGlCQAosJ6mu7fiyZeKqNKToQGDsM8hBADgUXoGAiqhSvp5QAnQKGIgUhwFUYLCVDFCrKUE1lBavAViFIDlTImbKC5Gm2hB0SlBCBMQiB0UjIQA7) center left no-repeat;
+}
+
+div[class="tooltip-inner"]
+{
+	max-width: 700px;
+	font-size: 14px;
+}
+
+#varTree
+{
+	overflow: hidden;
 }
 
 /*

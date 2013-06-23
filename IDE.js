@@ -531,6 +531,9 @@ TabView.prototype = _.extend(new Dagger.Object(),
 		//    if it's not entirely in the clipping rectangle of the container, move it to the beginning
 		//    else select it
 
+		if(event.path == undefined)
+			return;
+
 		if(this.$currentSelection)
 			this.$currentSelection.removeClass("active");
 		
@@ -543,8 +546,11 @@ TabView.prototype = _.extend(new Dagger.Object(),
 			$f.html('<a href="#' + event.path + '">' + event.path.split("/").pop() + '</a>');
 			$f.addClass("active");
 			$f.attr("data-path", event.path);
+			$f.attr("title", event.path);
 			$f.insertAfter(this.$el.children(".tabstart"));
 			this.$currentSelection = $f;
+
+			$f.tooltip({html: true, placement: "bottom", trigger: "hover"});
 		}
 		else
 		{
@@ -606,6 +612,9 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	navigate: function FileManager_navigate(path, line)
 	{
 		var f;
+
+		if(!path)	//not a real file, ignore it
+			return;
 		
 		if(path != this.currentPath)
 		{
@@ -872,26 +881,6 @@ VarView.prototype =
 
 	loadVariable: function VarView_loadVariable(node, callback)
 	{
-		console.log("would load: ", node);
-
-		/*
-		setTimeout(function()
-		{
-			var fakeVars =
-			[
-				{name: "string1", type: "char const*", value: 0x10001234, children: "herp derp"},
-				{name: "string2", type: "char const*", value: 0, children: true},
-				{name: "num", type: "int", value: 1048576},
-				{name: "numptr", type: "int*", value: 0x10001234, children: 1048576},
-			];
-
-			for(var i in fakeVars)
-				this.genNode(node, fakeVars[i]);
-
-			callback();
-		}.bind(this), 500);
-		*/
-
 		this.deferredEval(node.data.id, function(err, children)
 		{
 			if(err === undefined)
@@ -915,8 +904,17 @@ VarView.prototype =
 
 		var root = this.tree.getRoot();
 
+		var hasVars = false;
 		for(var i in vars)
+		{
 			this.genNode(root, vars[i]);
+			hasVars = true;
+		}
+		if(!hasVars)
+			new YAHOO.widget.HTMLNode(
+			{
+				html: "<em>(no variables)</em>"
+			}, root);
 
 		this.tree.render();
 	},
@@ -927,6 +925,7 @@ VarView.prototype =
 }
 function VarView(selector, deferredEvaluator)
 {
+	Dagger.Object.call(this);
 	this.tree = new YAHOO.widget.TreeView($(selector)[0]);
 	this.deferredEval = deferredEvaluator;
 }
@@ -954,58 +953,132 @@ function VarView(selector, deferredEvaluator)
 
 
 
-
-
-StackView.prototype = _.extend(new Dagger.Object(),
+ListView.prototype = _.extend(new Dagger.Object(),
 {
 	$el: null,
 
-	setData: function StackView_setData(data)
+	setData: function ListView_setData(data)
 	{
 		this.clear();
 
 		this.data = data;
 
 		if(data != undefined)
+		{
 			for(var i = 0; i < data.length; i++)
 			{
-				$line = $("<li/>");
-				$line.html(data[i].func);
-				$line.addClass((i & 1)? "odd" : "even");
-				$line.attr("data-frame", i);
-				this.$el.append($line);
+				var html = this._render(data[i], i, data);
+				//instantiate DOM element from html if it isn't one already
+				this.$el.append((typeof html == "string")? $(html) : html);
 			}
+		}
+		
+		this.$el.children().click(this._onItemSelected.bind(this));
 	},
-	clear: function StackView_clear()
+	clear: function ListView_clear()
 	{
+		this.$el.children().unbind("click");
 		this.$el.html("");
-		this.$el.click(this._onFrameSelect.bind(this))
 	},
-	setSelected: function StackView_setSelected(index)
+	setSelected: function ListView_setSelected(index)
 	{
-		this.$el.children().removeClass("selected").filter('[data-frame="' + index + '"]').addClass("selected");
+		this.$el.children().removeClass("selected").filter('[data-index="' + index + '"]').addClass("selected");
 	},
 
-	_onFrameSelect: function StackView_onFrameSelect(event)
+	_onItemSelected: function ListView__onItemSelected(event)
 	{
-		$f = $(event.target);
+		$r = $(event.currentTarget);
 
-		var frameNum = $f.attr("data-frame");
+		var index = $r.attr("data-index");
+		console.log("index " + index + " selected.");
+		this.trigger(new Dagger.Event(this, "selected", {index: index}));
+	}
+});
+function ListView(selector, optionalRenderer)
+{
+	Dagger.Object.call(this);
+	this.$el = $(selector);
+	if(optionalRenderer)
+		this._render = optionalRenderer;
 
-		console.log("frame " + frameNum + " selected.");
+	this.setData();
+}
 
-		this.trigger(new Dagger.Event(this, "selected", {frame: frameNum}));
+
+StackView.prototype = _.extend(new ListView(),
+{
+	_render: function StackView__render(item, index, data)
+	{
+		$line = $("<li/>");
+		$line.html((item.func == "??")? ("<em>(unknown)</em> at 0x" + item.addr.toString(16)) : item.func);
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", index);
+		
+		if(item.func == "??")
+			$line.attr("title", "0x" + item.addr.toString(16));
+		else
+			$line.attr("title", item.func + " - " + item.file + ":" + item.line);
+
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor"});
+
+		return($line);
 	}
 });
 function StackView(selector)
 {
-	/*<li class="odd">Galago::IO::SPI::write</li>
-	<li class="even selected">Galago::IO::SPI::read</li>
-	<li class="odd">main</li>*/
-
-	this.$el = $(selector);
+	ListView.apply(this, arguments);
 }
 
+
+DeviceView.prototype = _.extend(new ListView(),
+{
+	_render: function DeviceView__render(item, index, data)
+	{
+		$line = $("<li/>");
+		$line.html(item.productName + " <em>(" + item.serialNumber + ")</em>");
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", item.gdbPort);
+		return($line);
+	}
+});
+function DeviceView(selector)
+{
+	ListView.apply(this, arguments);
+}
+
+
+FilesView.prototype = _.extend(new ListView(),
+{
+	_render: function FilesView__render(item, index, data)
+	{
+		$line = $("<li/>");
+		$line.html(item.message);
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", index);
+		return($line);
+	}
+});
+function FilesView(selector)
+{
+	ListView.apply(this, arguments);
+}
+
+
+ProblemsView.prototype = _.extend(new ListView(),
+{
+	_render: function ProblemsView__render(item, index, data)
+	{
+		$line = $("<li/>");
+		$line.html(item.message);
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", item.gdbPort);
+		return($line);
+	}
+});
+function ProblemsView(selector)
+{
+	ListView.apply(this, arguments);
+}
 
 
 //resizable sidebar
@@ -1115,9 +1188,12 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		this.tabs = new TabView("#tabs", this.fileManager);
 
-
+		this.deviceView = new DeviceView("#devices");
 		this.stackView = new StackView("#stack");
 		this.varView = new VarView("#varTree");
+
+		this.filesView = new FilesView("#files");
+		this.problemsView = new ProblemsView("#problems");
 
 		this.verifyRestartButton = new Button("#verifyRestart");
 		this.runContinueButton = new Button("#runContinue");
@@ -1131,67 +1207,21 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.fileManager.navigate(e.path);
 		}, this);
 
+		this.deviceView.listen("selected", this.onDeviceSelect, this);
+		
 		this.stackView.listen("selected", this.onFrameChange, this);
 
-		this.codeTalker.listen("runstate", function(status)
-		{
-			switch(status.state)
-			{
-			case "stopped":
-				console.log(">>> UI set for stopped mode <<<: ", status);
-				
-				this.codeTalker.updateCallstack(function(err)
-				{
-					if(err)
-						return;
-
-					//update the callstack
-					var callstack = this.codeTalker.getStack();
-					this.stackView.setData(callstack);
-					
-					//create annotations for the whole callstack
-					for(var i = 0; i < callstack.length; i++)
-						this.fileManager.addStackpoint(		callstack[i].path,
-															callstack[i].line,
-															(callstack[i].level == 0)? "stopped" : "caller"
-														);
-
-					//jump to the stopped line
-					if(status.reason.frame != undefined)
-						this.fileManager.navigate(status.reason.frame.file, status.reason.frame.line);
-					else if((callstack.length > 0) && (callstack[0].path))
-						this.fileManager.navigate(callstack[0].path, callstack[0].line);
-					else
-						console.log("nowhere to go");
-
-					//update variables for that frame (also highlights the right frame in the stack view)
-					this.updateVarsForFrame();
-				}.bind(this));
-
-				this.setRunState(status.state);
-				break;
-			case "running":
-				console.log(">>> UI set for run mode <<<");
-
-				//remove all annotations for the last callstack
-				this.stackView.setData();
-				this.fileManager.removeStackpoint();
-
-				this.setRunState(status.state);
-				break;
-			}
-		}.bind(this));
+		this.codeTalker.listen("runstate", this.onRunStateChange.bind(this));
 
 		this.codeTalker.listen("breakpointsChanged", function(breakpoints)
 		{
 
 		}.bind(this));
 
-		/*this.codeTalker.connect(1034, function(err)
-		{
-			;
-		});*/
-
+		//we don't care as much about the "plug" event because it doesn't make us stop debugging!
+		this.codeTalker.listen("deviceStatus", this.onDeviceChange.bind(this));
+		this.codeTalker.listen("devicePlug", this.onDeviceChange.bind(this));
+		
 		this.varView.setDeferredEvaluator(this.codeTalker.dereferenceVar.bind(this.codeTalker));
 
 		this.fileManager.listen("addBreakpoint", function(event)
@@ -1262,6 +1292,103 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.fileManager.navigate("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp", 20);
 	},
 
+	onDeviceSelect: function IDE_onDeviceSelect(event)
+	{
+		this.deviceView.setSelected(event.index);
+		this.devicePort = event.index;
+	},
+	onDeviceChange: function IDE_onDeviceChange(event)
+	{
+		switch(event.event)
+		{
+		case "plug":
+			if(this.devicePort == undefined)
+				this.devicePort = event.device.gdbPort;
+			break;
+		case "status":
+			console.log("devices: ", event.devices);
+			this.deviceView.setData(event.devices);
+			this.deviceView.setSelected(this.devicePort);
+
+			var safe = false;
+			for(var i = 0; i < event.devices.length; i++)
+				if(event.devices[i].gdbPort == this.devicePort)
+				{
+					safe = true;
+					break;
+				}
+
+			if(!safe)
+			{
+				this.devicePort = undefined;
+
+				//must resign debug session
+				switch(this.runState)
+				{
+				case "running":
+				case "stopped":
+					console.log("unplugged the device we were debugging with!");
+					this.setRunState("editing");
+					break;
+				default:
+					console.log("unplugged the device we had selected.");
+					break;
+				}
+			}
+			break;
+		}
+	},
+
+
+	onRunStateChange: function IDE_onRunStateChange(status)
+	{
+		switch(status.state)
+		{
+		case "stopped":
+			console.log(">>> UI set for stopped mode <<<: ", status);
+			
+			this.codeTalker.updateCallstack(function(err)
+			{
+				if(err)
+					return;
+
+				//update the callstack
+				var callstack = this.codeTalker.getStack();
+				this.stackView.setData(callstack);
+				
+				//create annotations for the whole callstack
+				for(var i = 0; i < callstack.length; i++)
+					this.fileManager.addStackpoint(		callstack[i].path,
+														callstack[i].line,
+														(callstack[i].level == 0)? "stopped" : "caller"
+													);
+
+				//jump to the stopped line
+				if(status.reason.frame != undefined)
+					this.fileManager.navigate(status.reason.frame.fullname, status.reason.frame.line);
+				else if((callstack.length > 0) && (callstack[0].path))
+					this.fileManager.navigate(callstack[0].path, callstack[0].line);
+				else
+					console.log("nowhere to go");
+
+				//update variables for that frame (also highlights the right frame in the stack view)
+				this.updateVarsForFrame();
+			}.bind(this));
+
+			this.setRunState(status.state);
+			break;
+		case "running":
+			console.log(">>> UI set for run mode <<<");
+
+			//remove all annotations for the last callstack
+			this.stackView.setData();
+			this.fileManager.removeStackpoint();
+
+			this.setRunState(status.state);
+			break;
+		}
+	},
+
 	updateVarsForFrame: function IDE_updateVarsForFrame()
 	{
 		//a new frame has already been set if necessary, so simply refresh data
@@ -1272,6 +1399,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.varView.setData(this.codeTalker.getVars());		//update UI
 		}.bind(this));
 	},
+
 	setRunState: function IDE_setRunState(newRunState)
 	{
 		//passively (idempotently) respond to the state change and retain it
@@ -1358,10 +1486,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				this.setAllButtonsEnabled(false);
 				
 				//(simulated)
-				setTimeout(function()
+				this.codeTalker.build("/Users/kuy/Projects/Galago/ide/ardbeg/testProject", function()
 				{
-					//@@show build error highlights
+					console.log("Build complete, results: ", arguments);
 
+					//@@show build error highlights
 					this.setAllButtonsEnabled(true);
 				}.bind(this), 1000);
 			}
@@ -1396,15 +1525,21 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						this.setAllButtonsEnabled(true);
 						console.log("Error: ", error);
 					}
-					//else codetalker signals the correct state transition automatically
+					//else codetalker signals the correct state transition
 				}.bind(this));
 			}
 			else if(this.runState == "editing")
 			{
 				this.setAllButtonsEnabled(false);
 				
-				//@@determine the correct port from galagoServer
-				this.codeTalker.connect(1033, function(error)
+				//ugly hack just to ensure we connect with a proper device
+				if(this.devicePort == undefined)
+					this.devicePort = this.deviceView.data[0].gdbPort;
+
+				if(this.devicePort == undefined)
+					break;
+
+				this.codeTalker.connect(this.devicePort, function(error)
 				{
 					if(error)
 					{
@@ -1423,7 +1558,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 							this.setRunState("stopped");
 							console.log("Error: ", error);
 						}
-						//else codetalker signals the correct state transition automatically
+						//else codetalker signals the correct state transition
 					}.bind(this));
 				}.bind(this));
 			}
@@ -1442,22 +1577,21 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						this.setAllButtonsEnabled(true);
 						console.log("Error: ", error);
 					}
-					//else codetalker signals the correct state transition automatically
+					//else codetalker signals the correct state transition
 				}.bind(this));
 			}
 			else if(this.runState == "editing")
 			{
 				this.setAllButtonsEnabled(false);
 				
-				//@@determine the correct port from galagoServer
-				this.codeTalker.connect(1033, function(error)
+				this.codeTalker.connect(this.devicePort, function(error)
 				{
-					if(error)
+					if(error)	//if connecting to the hardware failed or timed out
 					{
 						this.setAllButtonsEnabled(true);
 						console.log("Error: ", error);
 					}
-					//else codetalker signals the correct state transition (to "stopped") automatically
+					//else codetalker signals the correct state transition
 				}.bind(this));
 			}
 			break;
@@ -1468,7 +1602,8 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		if(this.runState != "stopped")
 			return;
 
-		this.codeTalker.setVarFrame(event.frame, function(error)
+		var frame = event.index;
+		this.codeTalker.setVarFrame(frame, function(error)
 		{
 			if(error != undefined)
 				return;
@@ -1476,8 +1611,8 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.updateVarsForFrame();
 			var callstack = this.codeTalker.getStack();
 			
-			if(callstack[event.frame].path)
-				this.fileManager.navigate(callstack[event.frame].path, callstack[event.frame].line);
+			if(callstack[frame].path)
+				this.fileManager.navigate(callstack[frame].path, callstack[frame].line);
 			else
 				console.log("can't resolve that frame");
 

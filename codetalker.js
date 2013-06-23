@@ -1,12 +1,108 @@
 var childProcess = require("child_process");
 var Path = require("path");
+var moduleverse = require("moduleverse");
+var Q = require("q");
+var EventEmitter = require("events").EventEmitter;
+var Config = require("./Config");
+var Platform;		//will be resolved asynchronously later
 
-//objective:
-//  turn the following high-level actions into sequences of gdb commands:
-//    build, flash, restart-run, restart-paused, set-breakpoints, run, pause, set-expression
-//  notify on the following events:
-//    halted, async-error
+////////////////////////////////////////////////////////////////
 
+function _extend(obj)
+{
+	var recurse = arguments.callee;
+	Array.prototype.slice.call(arguments, 1).forEach(function(source)
+	{
+		for(var prop in source)
+		{
+			if(source[prop] instanceof Array)
+				obj[prop] = ((obj[prop] instanceof Array)? obj[prop] : []).concat(source[prop]);
+			else if((typeof(obj[prop]) == "object") && (typeof(source[prop]) == "object"))
+				recurse(obj[prop], source[prop]);
+			else
+				obj[prop] = source[prop];
+		}
+	});
+	return(obj);
+}
+
+////////////////////////////////////////////////////////////////
+
+SubProcess.prototype = _extend(new EventEmitter(),
+{
+	spawn: function SubProcess_spawn(path, args, options)
+	{
+		var ths = this;
+		this.quit();	//terminate existing process
+
+		if(path)
+		{
+			this._path = path;
+			this._args = args;
+			this._options = options;
+		}
+
+		ths.emit("start");
+		this._process = childProcess.spawn(this._path, this._args, this._options);
+
+		this._process.stdout.setEncoding("utf8");
+		this._process.stderr.setEncoding("utf8");
+
+		this._process.on("exit", function(code)
+		{
+			console.log("subprocess '" + this._path + "' exited with: ", code);
+			ths.emit("exit");
+			if(ths._restartWhenDied)
+			{
+				console.log("Respawning sub-process in a moment...");
+				setTimeout(function()
+				{
+					ths.spawn();
+				}, 500);
+			}
+		});
+
+		this._process.stdout.on("data", function(data){ths.emit("stdout", data);});
+		this._process.stderr.on("data", function(data){ths.emit("stderr", data);});
+	},
+
+	write: function SubProcess_write(data)
+	{
+		if(this._process)
+			this._process.stdin.write(data);
+	},
+
+	quit: function SubProcess_quit()
+	{
+		if(this._process != null)
+		{
+			this._restartWhenDied = false;
+			this._process.kill();
+			this._process = null;
+		}
+	},
+
+	_process: null,
+	_path: null,
+	_args: null,
+	_options: null,
+	_restartWhenDied: null,
+});
+function SubProcess(path, args, options)
+{
+	EventEmitter.call(this);
+
+	this._restartWhenDied = true;
+
+	var ths = this;
+	if(path)
+		process.nextTick(function()
+		{
+			ths.spawn(path, args, options);
+		});
+}
+
+////////////////////////////////////////////////////////////////
 
 function parseGDB_MI(response)
 {
@@ -73,6 +169,8 @@ function Command(cmd, expectsResponse, callback)
 	};
 }
 
+////////////////
+
 CodeTalker.prototype =
 {
 	listen: function CodeTalker_listen(eventName, fn, context)
@@ -97,7 +195,7 @@ CodeTalker.prototype =
 				delete this._listeners[eventName];
 		}
 	},
-	_emit: function CodeTalker__emit(eventName)
+	emit: function CodeTalker_emit(eventName)
 	{
 		var l = this._listeners[eventName];
 		var args = Array.prototype.slice.call(arguments, 1);
@@ -114,6 +212,25 @@ CodeTalker.prototype =
 	getVars: function CodeTalker_getVars()
 	{
 		return(this._lastVars);
+	},
+
+
+	//build() doesn't use GDB but it's exposed here for simplicity
+	build: function CodeTalker_build(projectRoot, callback)
+	{
+		if(Platform == undefined)
+			return(callback(new Error("CodeTalker hasn't finished initializing!")));
+		
+		var compiler = new Platform.Compiler();
+
+		compiler.compile(
+		{
+			sdk: this._sdkRootPath,
+			project: projectRoot,
+			platform: this._platformRootPath,
+			module: Platform.Config.baseDir(),	//OS-dependent module cache
+			output: projectRoot		//@@for now, should move elsewhere
+		}, callback);
 	},
 
 	connect: function CodeTalker_connect(port, callback)
@@ -162,6 +279,17 @@ CodeTalker.prototype =
 		}.bind(this));
 	},
 	
+	setELF: function CodeTalker_setELF(elfPath, callback)
+	{
+		this.submit("-file-exec-and-symbols " + elfPath, function(taskContext)
+		{
+			if(taskContext.response == "done")
+				callback();
+			else
+				callback(new Error("Setting the ELF file failed."));
+		}.bind(this));
+	},
+
 	flash: function CodeTalker_flash(callback)
 	{
 		this.submit("-target-download", function(taskContext)
@@ -538,7 +666,7 @@ CodeTalker.prototype =
 			throw new Error("why??");
 		
 		console.log("submitting command: >>" + this._tasks[0].command + "<<");
-		this._process.stdin.write(this._tasks[0].command + "\n");
+		this._gdbProcess.write(this._tasks[0].command + "\n");
 	},
 	cycleTask: function CodeTalker_cycleTask()
 	{
@@ -567,21 +695,31 @@ CodeTalker.prototype =
 		}
 	},
 	
-	spawn: function CodeTalker_spawn()
+	spawnGDB: function CodeTalker_spawnGDB()
 	{
-		this.quit();	//terminate existing process
-
-		var subProcess = childProcess.spawn(this._processPath, this._processArgs,
+		//the GDB server is fairly self-contained. All we need to do is listen to its status events
+		//  and bubble the events up to our client
+		this._galagoServerProcess = new Platform.GDBServerProcess();
+		this._galagoServerProcess.on("event", function(event)
+		{
+			console.log("Driver event: ", event);
+			switch(event.event)
 			{
-				env:
-				{
-				}
-			});
+			case "plug":	//device plugged in, expose it to the UI (if present)
+				this.emit("devicePlug", event);
+				break;
+			case "unplug":
+				this.emit("deviceUnplug", event);
+				break;
+			case "status":
+				this.emit("deviceStatus", event);
+				break;
+			}
+		}.bind(this));
+		
+		this._gdbProcess = new SubProcess(Path.join(this._sdkRootPath, "bin", "arm-none-eabi-gdb"), ["--interpreter=mi2"]);
 
-		subProcess.stdout.setEncoding("utf8");
-		subProcess.stderr.setEncoding("utf8");
-
-		subProcess.stdout.on("data", function(d)
+		this._gdbProcess.on("stdout", function(d)
 		{
 			console.log("stdout: >>", d, "<<");
 			
@@ -646,14 +784,14 @@ CodeTalker.prototype =
 						this._lastFrameNum = 0;
 						if(this._statusCallback)
 							this._statusCallback();
-						this._emit("runstate", {state: this._runState, reason: this._stopReason});
+						this.emit("runstate", {state: this._runState, reason: this._stopReason});
 						break;
 					case "*running":
 						console.log("update run state with: ", command, " and args: ", args);
 						this._runState = "running";
 						if(this._statusCallback)
 							this._statusCallback();
-						this._emit("runstate", {state: this._runState});
+						this.emit("runstate", {state: this._runState});
 						break;
 					case "=breakpoint-modified":
 						console.log("update breakpoint table with: ", args);
@@ -663,7 +801,7 @@ CodeTalker.prototype =
 			}
 		}.bind(this));
 		
-		subProcess.stderr.on("data", function(d)
+		this._gdbProcess.on("stderr", function(d)
 		{
 			console.log("stderr: ", d);
 			
@@ -674,32 +812,24 @@ CodeTalker.prototype =
 			}
 		}.bind(this));
 		
-		subProcess.on("exit", function(code)
+		this._gdbProcess.on("start", function()
 		{
-			console.log("subProcess exited with: ", code);
-
-			if(this._restartWhenDied)
+			this.init();
+			
+			//prime the task queue
+			var initialCommand = new Command("", false, function()
 			{
-				console.log("Respawning sub-process in a moment...");
-				setTimeout(function(){this.spawn()}.bind(this), 500);
-			}
-		}.bind(this));
-		
-		this._process = subProcess;
-		
-		//prime the task queue
-		var initialCommand = new Command("", false, function()
-		{
-			console.log("gdb started.");
-		});
-		this._tasks.push(initialCommand);
-		this._tasksActive = true;
+				console.log("gdb started.");
+			});
+			this._tasks.push(initialCommand);
+			this._tasksActive = true;
 
-		//first real task
-		this.submit("-gdb-set target-async 1", function()
-		{
-			console.log("gdb ready.");
-		});
+			//first real task
+			this.submit("-gdb-set target-async 1", function()
+			{
+				console.log("gdb ready.");
+			});
+		}.bind(this));
 	},
 	
 	//resets state when the connection to the gdb server is terminated, either intentionally or unexpectedly
@@ -718,19 +848,11 @@ CodeTalker.prototype =
 		this._breakpoints = {};
 	},
 
-	quit: function CodeTalker_quit()
-	{
-		if(this._process != null)
-		{
-			this.init();
-			this._restartWhenDied = false;
-			this._process.kill();
-			this._process = null;
-		}
-	},
-	
-	_process: null,
-	_restartWhenDied: null,
+	_platformRootPath: null,
+	_sdkRootPath: null,
+
+	_galagoServerProcess: null,
+	_gdbProcess: null,
 	_tasks: null,
 	_listeners: null,
 
@@ -745,21 +867,41 @@ CodeTalker.prototype =
 	_lastFrameNum: 0,
 	_breakpoints: null
 }
-function CodeTalker(processPath, processArgs)
+function CodeTalker()
 {
-	this._processPath = processPath;
-	this._processArgs = processArgs;
-
-	this._process = null;
+	this._galagoServerProcess = null;
+	this._gdbProcess = null;
 	this._restartWhenDied = true;
 	this._listeners = {};
+	
 	this.init();
-	this.spawn();
+
+	//look up the latest installed Platform and SDK
+	var platformPromise = moduleverse.findLocalInstallation(Config.baseDir(), "logiblock", "platform");
+	var SDKPromise = moduleverse.findLocalInstallation(Config.baseDir(), "logiblock", Config.sdkName());
+	
+	var ths = this;
+	Q.all([platformPromise, SDKPromise]).then(function(JSONs)
+	{
+		if(!JSONs[0] || !JSONs[1])
+			return(Q.reject(new Error("Could not find installation for either logiblock/platform or logiblock/sdk.")));
+
+		ths._platformRootPath = JSONs[0].__path;
+		ths._sdkRootPath = JSONs[1].__path;
+
+		Platform = require(Path.join(ths._platformRootPath, "bin", "SDK"));	//fulfill global dependency
+		
+		ths.spawnGDB();
+	}).fail(function(error)
+	{
+		console.log("failed! ", arguments);
+	});
 }
+
 
 if(require.main == module)
 {
-	var gdb = new CodeTalker("/Users/kuy/Projects/Galago/galago-ide/SDK/bin/arm-elf-gdb", ["--interpreter=mi2", "/Users/kuy/Projects/Galago/ide/ardbeg/testProject/module.elf"]);
+	var gdb = new CodeTalker();
 
 	function genericCompletion(taskContext)
 	{
