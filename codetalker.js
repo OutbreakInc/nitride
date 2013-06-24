@@ -204,6 +204,11 @@ CodeTalker.prototype =
 				l[i].fn.apply(l[i], args);
 	},
 	
+	getPaths: function CodeTalker_getPaths()
+	{
+		return(this._pathsTable);
+	},
+
 	getStack: function CodeTalker_getStack()
 	{
 		return(this._lastCallstack);
@@ -223,14 +228,13 @@ CodeTalker.prototype =
 		
 		var compiler = new Platform.Compiler();
 
-		compiler.compile(
+		var paths = _extend({}, this._pathsTable,
 		{
-			sdk: this._sdkRootPath,
 			project: projectRoot,
-			platform: this._platformRootPath,
-			module: Platform.Config.baseDir(),	//OS-dependent module cache
 			output: projectRoot		//@@for now, should move elsewhere
-		}, callback);
+		});
+
+		compiler.compile(paths, callback);
 	},
 
 	connect: function CodeTalker_connect(port, callback)
@@ -873,6 +877,9 @@ function CodeTalker()
 	this._gdbProcess = null;
 	this._restartWhenDied = true;
 	this._listeners = {};
+
+	var p = Q.defer();	//initialization promise
+	this.promise = p.promise;
 	
 	this.init();
 
@@ -891,10 +898,19 @@ function CodeTalker()
 
 		Platform = require(Path.join(ths._platformRootPath, "bin", "SDK"));	//fulfill global dependency
 		
+		ths._pathsTable =
+		{
+			sdk: ths._sdkRootPath,
+			platform: ths._platformRootPath,
+			module: Platform.Config.baseDir()	//OS-dependent module cache
+		};
 		ths.spawnGDB();
+
+		p.resolve(ths);
 	}).fail(function(error)
 	{
-		console.log("failed! ", arguments);
+		console.log("failed! ", error);
+		p.reject(error);
 	});
 }
 

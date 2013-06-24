@@ -214,6 +214,23 @@ div[class="tooltip-inner"]
 	overflow: hidden;
 }
 
+.addButton
+{
+	position: absolute;
+	right: 20px;	/* @@problem - no explanation for why it's not clickable when all the way to the right */
+	width: 20px;
+	height: 20px;
+	/*border: 1px solid #888;
+	border-radius: 4px 4px 4px 4px;*/
+	background: url(../img/glyphicons-halflings.png) -405px -94px no-repeat;
+	cursor: pointer;
+}
+
+p.error-body
+{
+	word-wrap: break-word;
+}
+
 /*
 img.outbreakIDELogo
 {

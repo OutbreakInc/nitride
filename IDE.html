@@ -57,10 +57,10 @@
 							<li class="divider"></li>
 							<li><a href="#">Help</a></li>
 							</script>
-							<li class="selected"><a href="#/main.cpp">main.cpp</a></li>
+							<!--<li class="selected"><a href="#/main.cpp">main.cpp</a></li>
 							<li><a href="#/GalagoAPI.cpp">GalagoAPI.cpp</a></li>
 							<li><a href="#/GalagoAPI.h">GalagoAPI.h</a></li>
-							<li class="divider"></li>
+							<li class="divider"></li>-->
 							<li><a href="#settings">Settings</a></li>
 							<li class="divider"></li>
 							<li><a href="#">Help</a></li>
@@ -116,6 +116,20 @@
 	</div>
 	-->
 	
+	<div id="modalDialog" class="modal hide fade" tabindex="-1" role="dialog">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			<h3>Title</h3>
+		</div>
+		<div class="modal-body">
+		</div>
+		<div class="modal-footer">
+			<a href="#" class="btn cancelButton">Cancel</a>
+			<a href="#" class="btn btn-primary okButton">OK</a>
+		</div>
+	</div>
+
+
 	<div id="editor" class="editorView">
 		<div class="leftColumn">
 			<div id="aceView" class="documentView"></div>
@@ -123,18 +137,20 @@
 		<div class="sidebar">
 			<div class="sidebarScroll">
 				<ul id="sidebarSections" class="scroll">
-					<li class="visibleEdit visibleDebug">
+					<li id="files" class="visibleEdit visibleDebug">
 						<div class="sidebarHeader">
 							Files
+							<span class="addButton"></span>
 						</div>
 						<div class="sidebarSection">
-							<ul id="files" class="listView">
+							<ul class="listView">
 							</ul>
 						</div>
 					</li>
 					<!--<li class="visibleEdit visibleDebug">
 						<div class="sidebarHeader">
 							Breakpoints
+							<div class="addButton"></div>
 						</div>
 						<div class="sidebarSection">
 							<ul id="breakpoints" class="listView">
@@ -144,45 +160,46 @@
 					<!--<li class="visibleEdit">
 						<div class="sidebarHeader">
 							Modules
+							<div class="addButton"></div>
 						</div>
 						<div class="sidebarSection">
 							<ul id="modules" class="listView">
 							</ul>
 						</div>
 					</li>-->
-					<li class="visibleEdit">
+					<li id="devices" class="visibleEdit">
 						<div class="sidebarHeader">
 							Devices
 						</div>
 						<div class="sidebarSection">
-							<ul id="devices" class="listView">
+							<ul class="listView">
 							</ul>
 						</div>
 					</li>
-					<li class="visibleEdit">
+					<li id="problems" class="visibleEdit">
 						<div class="sidebarHeader">
 							Problems
 						</div>
 						<div class="sidebarSection">
-							<ul id="problems" class="listView">
+							<ul class="listView">
 							</ul>
 						</div>
 					</li>
-					<li class="visibleDebug">
+					<li id="stack" class="visibleDebug">
 						<div class="sidebarHeader">
 							Callstack
 						</div>
 						<div class="sidebarSection">
-							<ul id="stack" class="listView">
+							<ul class="listView">
 							</ul>
 						</div>
 					</li>
-					<li class="visibleDebug">
+					<li id="varTree" class="visibleDebug">
 						<div class="sidebarHeader">
 							Arguments &amp; Locals
 						</div>
 						<div class="sidebarSection yui-skin-sam">
-							<div id="varTree">
+							<div class="tree">
 							</div>
 						</div>
 					</li>
@@ -190,12 +207,28 @@
 			</div>
 			<ul class="noscroll">
 				<li class="controlButtons">
-					<button id="verifyRestart" class="btn"></button>
-					<button id="runContinue" class="btn"></button>
-					<button id="debugPause" class="btn"></button>
-					<button id="stop" class="btn"></button>
+					<button id="verifyRestart" class="btn"><span class="icon-ok"></span></button>
+					<button id="runContinue" class="btn"><span class="icon-play"></span></button>
+					<button id="debugPause" class="btn"><span class="icon-pause"></span></button>
+					<button id="stop" class="btn disabled"><span class="icon-eject"></span></button>
 				</li>
 			</ul>
+		</div>
+	</div>
+
+	<div style="display: none;">
+		<div id="addFileDialog">
+			<p>Please choose a new name for the file.</p>
+			<form>
+				<label for="addFileDialog_name">Name</label>
+				<input id="addFileDialog_name" name="name" type="text" tabindex="0" placeholder="example.cpp"/>
+				<label for="addFileDialog_base">Relative to</label>
+				<select id="addFileDialog_base" name="base" tabindex="1">
+					<option value="project">your project's directory</option>
+					<option value="platform">the Logiblock SDK directory</option>
+					<option value="sdk">the GNU SDK directory</option>
+				</select>
+			</form>
 		</div>
 	</div>
 

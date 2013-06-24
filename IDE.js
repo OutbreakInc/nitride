@@ -261,6 +261,7 @@ var AceRange = ace.require("ace/range").Range;
 
 //node requirements
 var fs = require("fs");
+var Path = require("path");
 var CodeTalker = require("./codetalker");
 
 File.prototype = _.extend(new Dagger.Object(),
@@ -269,11 +270,14 @@ File.prototype = _.extend(new Dagger.Object(),
 	contents: null,
 	session: null,
 	document: null,
-	needsSave: false,
 
+	needsSave: function File_needsSave()
+	{
+		return(this._needsSave);
+	},
 	close: function File_close()
 	{
-		if(this.needsSave)
+		if(this._needsSave)
 			this.save(true);
 		if(this.document != undefined)
 			this.document.removeEventListener("changed", this._onChangeListener);
@@ -293,11 +297,11 @@ File.prototype = _.extend(new Dagger.Object(),
 
 		this.document = this.session.getDocument();
 
-		this.document.on("changed", this._onChangeListener = function(e)
+		this.document.on("change", this._onChangeListener = function(e)
 		{
-			if(!this.needsSave)
+			if(!this._needsSave)
 				this.trigger(new Dagger.Event(this, "needsSave"));
-			this.needsSave = true;
+			this._needsSave = true;
 			
 			this.save();
 		}.bind(this));
@@ -324,14 +328,15 @@ File.prototype = _.extend(new Dagger.Object(),
 
 	_doSave: function File__doSave()
 	{
-		if(this.needsSave)
+		if(this._needsSave)
 			this.trigger(new Dagger.Event(this, "save"));
 
-		this.needsSave = false;
+		this._needsSave = false;
 
 		console.log("will save '" + this.path + "' now.");
 		fs.writeFile(this.path, this.contents, {encoding: "utf8"})
-	}
+	},
+	_needsSave: false
 });
 function File(path)
 {
@@ -607,8 +612,108 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		this.editor.listen("toggleBreakpoint", this.onBreakpointRequested, this);
 	},
+	setFilesView: function FileManager_setFilesView(filesView)
+	{
+		this.filesView = filesView;
 
-	//line is optional
+		this.filesView.listen("addFile", function(e)
+		{
+			console.log("adding file to project from user request...");
+			this.addFile(e.name, e.base);
+		}, this);
+
+		this.filesView.listen("selected", function(e)
+		{
+			this.navigate(e.index);
+		}, this);
+	},
+
+	getProjectPath: function FileManager_getProjectPath()
+	{
+		return(this.projectPath);
+	},
+
+	openProject: function FileManager_openProject(projectPath)
+	{
+		this.closeProject();
+
+		this.projectPath = projectPath;
+		this.pathsTable.project = this.pathsTable.output = this.projectPath;
+
+		fs.readFile(Path.join(this.projectPath, "module.json"), function(err, contents)
+		{
+			try
+			{
+				this.project = JSON.parse(contents);
+			}
+			catch(err)
+			{
+				this.closeProject();
+			}
+
+			var files = [];
+			for(var i = 0; i < this.project.files.length; i++)
+			{
+				var path = this.resolvePath(this.project.files[i]);
+				files.push({path: path, name: Path.basename(path)});
+			}
+
+			this.filesView.setData(files);
+
+			if(files.length > 0)
+				this.navigate(files[0].path);
+
+		}.bind(this));
+	},
+	
+	saveProject: function FileManager_saveProject(force)
+	{
+		var ths = this;
+		if((this.projectPath == undefined) || !this.project)
+			return;
+
+		if(this._saveTimer)
+			clearTimeout(this._saveTimer);
+
+		if(force)
+			this._doSave();
+		else
+			this._saveTimer = setTimeout(function()	//don't save until after shortly after the last call
+			{
+				ths._doSave();
+			}, 2000);
+	},
+
+	_doSave: function File__doSave()
+	{
+		if(this._needsSave)
+			this.trigger(new Dagger.Event(this, "save"));
+
+		this._needsSave = false;
+
+		console.log("will save project now.");
+		fs.writeFile(	Path.join(this.projectPath, "module.json"),
+						JSON.stringify(this.project),
+						{encoding: "utf8"},
+						function(err)
+		{
+			console.log("project written!");
+		});
+	},
+	closeProject: function FileManager_closeProject()
+	{
+		if(this._needsSave)
+			this.saveProject(true);
+
+		//close all tabs of files belonging to this project?
+
+		this.project = undefined;
+		this.projectPath = undefined;
+		this.pathsTable.project = this.pathsTable.output = this.projectPath;
+		this.filesView.setData();
+	},
+
+	//argument 'line' is optional
 	navigate: function FileManager_navigate(path, line)
 	{
 		var f;
@@ -665,6 +770,8 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			
 			this.restoreAnnotations();
 		}
+
+		this.filesView.setSelected(this.currentPath);	//ok if it doesn't match/select anything
 
 		this.trigger(new Dagger.Event(this, "navigated", {path: this.currentPath}));
 		this.trigger(new Dagger.Event(this, "changed"));
@@ -795,19 +902,79 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			this.trigger(new Dagger.Event(this, "removeBreakpoint", {path: event.path, line: event.line}));
 	},
 
+	addFile: function FileManager_addFile(subPath, relativeBase, navigateTo)
+	{
+		var fileEntry = {base: relativeBase, dir: Path.dirname(subPath), name: Path.basename(subPath)};
+		
+		var path = this.resolvePath(fileEntry);
+
+		if(path == undefined)	//unresolvable
+		{
+			console.warn("Could not resolve path:", subPath, relativeBase);
+			return;
+		}
+
+		//if the project already contains this file, don't add it.
+		for(var i = 0; i < this.project.files.length; i++)
+			if(this.resolvePath(this.project.files[i]) == path)
+				return;
+
+		this.project.files.push(f);
+
+		if(navigateTo == false)
+			return;
+
+		//open the file
+		var f = this.insertFile(path);
+		this.navigate(path);
+	},
+	removeFile: function FileManager_removeFile(path)
+	{
+		if(path == this.currentPath)	//navigate away first
+			this.navigate((this.filesByLRU[0] == this.currentPath)? this.filesByLRU[1] : this.filesByLRU[0]);
+
+		//find the file
+		for(var i = 0; i < this.project.files.length; i++)
+			if(this.resolvePath(this.project.files[i]) == path)
+			{
+				this.project.files.splice(i, 1);	//delete the file from the project, not the file itself
+				break;
+			}
+	},
+
+	resolvePath: function FileManager_resolvePath(projectFileEntity)
+	{
+		var base = projectFileEntity.base || "project";
+
+		if(this.pathsTable[base] == undefined)
+			return(undefined);
+
+		return(		Path.join(	this.pathsTable[base],
+								projectFileEntity.dir || "",
+								projectFileEntity.name
+							)
+				);
+	},
+
 	editor: null,
 	currentPath: null,
 	filesByPath: null,
 	filesByLRU: null,
 	stoppedPoint: null,
+
+	projectPath: undefined,
+	project: null,
+	_needsSave: false
 });
-function FileManager(editor)
+function FileManager(pathsTable, editor, filesView)
 {
 	Dagger.Object.call(this);
 	this.currentPath = undefined;
 	this.filesByPath = {};
 	this.filesByLRU = [];
+	this.pathsTable = pathsTable;
 	this.setEditor(editor);
+	this.setFilesView(filesView);
 }
 
 //
@@ -926,7 +1093,9 @@ VarView.prototype =
 function VarView(selector, deferredEvaluator)
 {
 	Dagger.Object.call(this);
-	this.tree = new YAHOO.widget.TreeView($(selector)[0]);
+	this.$el = $(selector);
+	this.$tree = $(".tree", this.$el);
+	this.tree = new YAHOO.widget.TreeView(this.$tree[0]);
 	this.deferredEval = deferredEvaluator;
 }
 
@@ -956,6 +1125,7 @@ function VarView(selector, deferredEvaluator)
 ListView.prototype = _.extend(new Dagger.Object(),
 {
 	$el: null,
+	$list: null,
 
 	setData: function ListView_setData(data)
 	{
@@ -963,26 +1133,26 @@ ListView.prototype = _.extend(new Dagger.Object(),
 
 		this.data = data;
 
-		if(data != undefined)
+		if((data != undefined) && (data.length > 0))
 		{
 			for(var i = 0; i < data.length; i++)
 			{
 				var html = this._render(data[i], i, data);
 				//instantiate DOM element from html if it isn't one already
-				this.$el.append((typeof html == "string")? $(html) : html);
+				this.$list.append((typeof html == "string")? $(html) : html);
 			}
 		}
-		
-		this.$el.children().click(this._onItemSelected.bind(this));
+
+		this.$list.children().click(this._onItemSelected.bind(this));
 	},
 	clear: function ListView_clear()
 	{
-		this.$el.children().unbind("click");
-		this.$el.html("");
+		this.$list.children().unbind("click");
+		this.$list.html("");
 	},
 	setSelected: function ListView_setSelected(index)
 	{
-		this.$el.children().removeClass("selected").filter('[data-index="' + index + '"]').addClass("selected");
+		this.$list.children().removeClass("selected").filter('[data-index="' + index + '"]').addClass("selected");
 	},
 
 	_onItemSelected: function ListView__onItemSelected(event)
@@ -998,10 +1168,12 @@ function ListView(selector, optionalRenderer)
 {
 	Dagger.Object.call(this);
 	this.$el = $(selector);
+	this.$list = $("ul", this.$el);
 	if(optionalRenderer)
 		this._render = optionalRenderer;
 
-	this.setData();
+	this.$addButton = $(".addButton", this.$el);	//doesn't always have one
+	this.$addButton.click(function(){return(this._onAdd());}.bind(this));
 }
 
 
@@ -1009,7 +1181,7 @@ StackView.prototype = _.extend(new ListView(),
 {
 	_render: function StackView__render(item, index, data)
 	{
-		$line = $("<li/>");
+		var $line = $("<li/>");
 		$line.html((item.func == "??")? ("<em>(unknown)</em> at 0x" + item.addr.toString(16)) : item.func);
 		$line.addClass((index & 1)? "odd" : "even");
 		$line.attr("data-index", index);
@@ -1034,12 +1206,27 @@ DeviceView.prototype = _.extend(new ListView(),
 {
 	_render: function DeviceView__render(item, index, data)
 	{
-		$line = $("<li/>");
+		var $line = $("<li/>");
 		$line.html(item.productName + " <em>(" + item.serialNumber + ")</em>");
 		$line.addClass((index & 1)? "odd" : "even");
 		$line.attr("data-index", item.gdbPort);
+		$line.attr("title", item.vendorName + " " + item.productName + " (serial no. \"" + item.serialNumber + "\")");
+
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor"});
+
 		return($line);
-	}
+	},
+	setData: function DeviceView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $line = $("<li><em>(no devices attached)</em></li>");
+			$line.addClass("even");
+			this.$list.append($line);
+		}
+	},
 });
 function DeviceView(selector)
 {
@@ -1051,14 +1238,37 @@ FilesView.prototype = _.extend(new ListView(),
 {
 	_render: function FilesView__render(item, index, data)
 	{
-		$line = $("<li/>");
-		$line.html(item.message);
+		var $line = $("<li/>");
+		$line.html(item.name);
 		$line.addClass((index & 1)? "odd" : "even");
-		$line.attr("data-index", index);
+		$line.attr("data-index", item.path);
+		$line.attr("title", item.path);
+
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor"});
+		
 		return($line);
-	}
+	},
+	_onAdd: function FilesView__onAdd(event)
+	{
+		var html = $("#addFileDialog").html();
+		DialogView("Add File to Project", html, function(success, data)
+		{
+			this.trigger(new Dagger.Event(this, "addFile", {name: data.name, base: data.base}));
+		}, this);
+	},
+	setData: function FilesView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $line = $("<li><em>(no project files)</em></li>");
+			$line.addClass("even");
+			this.$list.append($line);
+		}
+	},
 });
-function FilesView(selector)
+function FilesView(selector, renderFn)
 {
 	ListView.apply(this, arguments);
 }
@@ -1068,17 +1278,114 @@ ProblemsView.prototype = _.extend(new ListView(),
 {
 	_render: function ProblemsView__render(item, index, data)
 	{
-		$line = $("<li/>");
-		$line.html(item.message);
+		var $line = $("<li/>");
+		
+		var err, type = "Error";
+		if(item.err.substr(0, 7) == "error: ")	err = item.err.substr(7);
+		else if(item.err.substr(0, 9) == "warning: ")
+		{
+			type = "Warning";
+			err = item.err.substr(9);
+		}
+		else err = item.err;
+
+		var location = Path.basename(item.file) + ":" + item.line;
+		var symbol = (type == "Error")? "icon-remove-sign" : "icon-exclamation-sign";
+		
+		$line.html('<span class="' + symbol + '"/> ' + err);
 		$line.addClass((index & 1)? "odd" : "even");
-		$line.attr("data-index", item.gdbPort);
+		$line.attr("data-index", item.file);
+		$line.attr("data-line", item.line);
+
+		$line.popover(
+		{
+			html: true,
+			placement: "left",
+			trigger: "hover",
+			title: '<span class="' + symbol + '"/> Build ' + type,
+			content: '<p class="error-body">' + item.err + "</p><hr/><p><em>" + location + "</em></p>",
+			delay: 100,
+			container: "#editor"
+		});
+
 		return($line);
-	}
+	},
+	_onItemSelected: function ProblemsView__onItemSelected(e)
+	{
+		$item = $(e.currentTarget);
+		var path = $item.attr("data-index");
+		this.trigger(new Dagger.Event(this, "selected", {index: path, path: path, line: $item.attr("data-line")}));
+	},
+	setData: function ProblemsView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $line = $('<li><span class="icon-ok-sign"/> <em>(no build errors)</em></li>');
+			$line.addClass("even");
+			this.$list.append($line);
+		}
+	},
 });
 function ProblemsView(selector)
 {
 	ListView.apply(this, arguments);
 }
+
+
+
+
+
+
+function DialogView(title, html, callback, context)
+{
+	var $el = $("#modalDialog");
+
+	//fill it up
+	$("h3", $el).html(title);
+	$(".modal-body", $el).html(html);
+
+	var options = {};
+	var complete = function DialogView_complete(success)
+	{
+		$ok.unbind("click", submit);
+		$cancel.unbind("click", fail);
+		$f.unbind("submit", submit);
+
+		var $options = $("input", $el).add("select", $el);
+		for(var i = 0; i < $options.length; i++)
+			options[$($options[i]).attr("name")] = $($options[i]).val();
+
+		$el.modal("hide");
+		callback.call(context, success, options);
+	};
+	var submit = function DialogView_sumbit(e)
+	{
+		complete(true, options);
+		e.preventDefault();
+		return(false);	//html compatibility
+	};
+	var fail = function DialogView_fail(e)
+	{
+		complete(false, options);
+		e.preventDefault();
+		return(false);	//html compatibility
+	};
+
+	var $ok = $(".okButton", $el).click(submit);
+	var $cancel = $(".cancelButton", $el).click(fail);
+
+	$f = $("form", $el).submit(submit);
+	
+	$el.modal().bind("shown", function()
+	{
+		$($("input", $el)[0]).focus();
+	});	//show it
+}
+
+
+//<p>File</p><form id="dialogForm"><input name="newName" type="text" placeholder="filename.cpp"></input></form>
 
 
 //resizable sidebar
@@ -1138,9 +1445,9 @@ function ProblemsView(selector)
 
 Button.prototype = _.extend(new Dagger.Object(),
 {
-	setTitle: function Button_setTitle(title)
+	setSymbol: function Button_setSymbol(symbol)
 	{
-		this.$el.html(title);
+		$("span", this.$el).removeClass(this.symbol).addClass(this.symbol = ("icon-" + symbol));
 		return(this);
 	},
 	setAction: function Button_setAction(action)
@@ -1163,12 +1470,14 @@ Button.prototype = _.extend(new Dagger.Object(),
 	},
 
 	$el: null,
-	action: null
+	action: null,
+	symbol: null
 });
 function Button(selector)
 {
 	Dagger.Object.call(this);
 	this.$el = $(selector);
+	this.symbol = $("span", this.$el).attr("class");
 	this.$el.click(this._onClick.bind(this));
 }
 
@@ -1179,12 +1488,16 @@ function Button(selector)
 
 IDE.prototype = _.extend(new Dagger.Object(),
 {
-	init: function IDE_init()
+	init: function IDE_init(codeTalker)
 	{
+		this.codeTalker = codeTalker;
+
 		this.editor = new EditorView("#aceView");
 		//editor.open("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp");
 
-		this.fileManager = new FileManager(this.editor);
+		this.filesView = new FilesView("#files");
+		
+		this.fileManager = new FileManager(this.codeTalker.getPaths(), this.editor, this.filesView);
 
 		this.tabs = new TabView("#tabs", this.fileManager);
 
@@ -1192,19 +1505,22 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.stackView = new StackView("#stack");
 		this.varView = new VarView("#varTree");
 
-		this.filesView = new FilesView("#files");
 		this.problemsView = new ProblemsView("#problems");
+		this.problemsView.setData();
 
 		this.verifyRestartButton = new Button("#verifyRestart");
 		this.runContinueButton = new Button("#runContinue");
 		this.debugPauseButton = new Button("#debugPause");
 		this.stopButton = new Button("#stop");
 
-		this.codeTalker = new CodeTalker.CodeTalker("/Users/kuy/Projects/Galago/galago-ide/SDK/bin/arm-elf-gdb", ["--interpreter=mi2", "/Users/kuy/test/module.elf"]);
-
 		this.tabs.listen("selected", function(e)
 		{
 			this.fileManager.navigate(e.path);
+		}, this);
+
+		this.problemsView.listen("selected", function(e)
+		{
+			this.fileManager.navigate(e.path, e.line);
 		}, this);
 
 		this.deviceView.listen("selected", this.onDeviceSelect, this);
@@ -1289,7 +1605,8 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.setRunState("editing");
 
 		//@@demo
-		this.fileManager.navigate("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp", 20);
+		this.fileManager.openProject("/Users/kuy/Projects/Galago/ide/ardbeg/testProject");
+		//this.fileManager.navigate("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp", 20);
 	},
 
 	onDeviceSelect: function IDE_onDeviceSelect(event)
@@ -1427,31 +1744,31 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		switch(newRunState)
 		{
 		case "editing":
-			this.verifyRestartButton.setTitle("\u221A").setAction("building");
-			this.runContinueButton.setTitle("&gt;").setAction("running");
-			this.debugPauseButton.setTitle("&gt;||").setAction("stopped");
-			this.stopButton.setTitle("X").setAction(false);
+			this.verifyRestartButton.setSymbol("ok").setAction("building");
+			this.runContinueButton.setSymbol("play").setAction("running");
+			this.debugPauseButton.setSymbol("pause").setAction("stopped");
+			this.stopButton.setSymbol("eject").setAction(false);
 			break;
 
 		case "building":
-			this.verifyRestartButton.setTitle("\u221A").setAction(false);
-			this.runContinueButton.setTitle("&gt;").setAction(false);
-			this.debugPauseButton.setTitle("&gt;||").setAction(false);
-			this.stopButton.setTitle("X").setAction("editing");
+			this.verifyRestartButton.setSymbol("ok").setAction(false);
+			this.runContinueButton.setSymbol("play").setAction(false);
+			this.debugPauseButton.setSymbol("pause").setAction(false);
+			this.stopButton.setSymbol("eject").setAction("editing");
 			break;
 
 		case "running":
-			this.verifyRestartButton.setTitle("&lt;&lt;").setAction(false);
-			this.runContinueButton.setTitle("&gt;").setAction(false);
-			this.debugPauseButton.setTitle("||").setAction("stopped");
-			this.stopButton.setTitle("X").setAction("editing");
+			this.verifyRestartButton.setSymbol("repeat").setAction(false);
+			this.runContinueButton.setSymbol("play").setAction(false);
+			this.debugPauseButton.setSymbol("pause").setAction("stopped");
+			this.stopButton.setSymbol("eject").setAction("editing");
 			break;
 
 		case "stopped":
-			this.verifyRestartButton.setTitle("&lt;&lt;").setAction("restart");
-			this.runContinueButton.setTitle("&gt;").setAction("running");
-			this.debugPauseButton.setTitle("||").setAction(false);
-			this.stopButton.setTitle("X").setAction("editing");
+			this.verifyRestartButton.setSymbol("repeat").setAction("restart");
+			this.runContinueButton.setSymbol("play").setAction("running");
+			this.debugPauseButton.setSymbol("pause").setAction(false);
+			this.stopButton.setSymbol("eject").setAction("editing");
 			break;
 		}
 		this.runState = newRunState;
@@ -1485,13 +1802,25 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			{
 				this.setAllButtonsEnabled(false);
 				
-				//(simulated)
-				this.codeTalker.build("/Users/kuy/Projects/Galago/ide/ardbeg/testProject", function()
+				if(this.editor.file.needsSave())
+					this.editor.file.save(true);
+				
+				this.codeTalker.build(this.fileManager.getProjectPath(), function(err, elf, result)
 				{
 					console.log("Build complete, results: ", arguments);
 
-					//@@show build error highlights
 					this.setAllButtonsEnabled(true);
+					
+					if(err)
+						return(console.warn("Totally failed to build."));
+
+					this.problemsView.setData(result.compileErrors);
+
+					if(result.compileErrors && (result.compileErrors.length > 0))
+						this.firmwareImage = undefined;
+					else
+						this.firmwareImage = elf;
+
 				}.bind(this), 1000);
 			}
 			break;
@@ -1653,7 +1982,13 @@ $(function()
 {
 	window.ide = new IDE();
 
-	window.ide.init();
+	new CodeTalker.CodeTalker().promise.then(function(codeTalker)
+	{
+		window.ide.init(codeTalker);
+	}).fail(function()
+	{
+		console.log("startup failed, fall back to launchupdate layer.");
+	});
 })
 
 
