@@ -253,6 +253,11 @@ var homeView = new Views.Home(new Models.Home(
 //homeView.data.recentNews.push(new Models.News({title:"announcement", author:{id: "1"}, body:"hello world!"}));
 //homeView.data.projects.push(new Models.Project({name:"hello", date:"yesterday"}));
 
+process.on("uncaughtException", function(exception)
+{
+	console.log("Clouds are annoying, yall: ", exception);
+});
+
 var aceRange = ace.require("ace/range").Range;
 var aceCppMode = ace.require("ace/mode/c_cpp").Mode;
 var AceEditSession = ace.require("ace/edit_session").EditSession;
@@ -266,11 +271,6 @@ var CodeTalker = require("./codetalker");
 
 File.prototype = _.extend(new Dagger.Object(),
 {
-	path: null,
-	contents: null,
-	session: null,
-	document: null,
-
 	needsSave: function File_needsSave()
 	{
 		return(this._needsSave);
@@ -280,20 +280,34 @@ File.prototype = _.extend(new Dagger.Object(),
 		if(this._needsSave)
 			this.save(true);
 		if(this.document != undefined)
-			this.document.removeEventListener("changed", this._onChangeListener);
+			this.document.removeEventListener("change", this._onChangeListener);
 	},
 
 	_onFileRead: function File__onFileRead(error, contents)
 	{
-		console.log("read file yo!")
-		this.contents = contents;
-		this.trigger(new Dagger.Event(this, "load"));
+		if(!error)
+		{
+			console.log("read file yo!")
+			this.contents = contents;
+
+			this.trigger(new Dagger.Event(this, "load", {error: false}));
+		}
+		else if(error.code == "ENOENT")
+		{
+			//create a new file and fire the callback
+			fs.writeFile(this.path, "", {encoding: "utf8"}, function(error)
+			{
+				this.trigger(new Dagger.Event(this, "load", {error: !!error}));
+			}.bind(this));
+		}	
+		else
+			this.trigger(new Dagger.Event(this, "load", {error: true}));
 	},
 	bind: function File_bind(aceSession)
 	{
 		this.session = aceSession;
 
-		this.session.setValue(this.contents, {renderCall: true})
+		this.session.setValue(this.contents, {renderCall: true});
 
 		this.document = this.session.getDocument();
 
@@ -334,27 +348,32 @@ File.prototype = _.extend(new Dagger.Object(),
 		this._needsSave = false;
 
 		console.log("will save '" + this.path + "' now.");
-		fs.writeFile(this.path, this.contents, {encoding: "utf8"})
-	},
-	_needsSave: false
+		fs.writeFile(this.path, this.contents, {encoding: "utf8"}, function(error)
+		{
+			if(error)
+				console.log("error, write to backup path?!", error);
+		});
+	}
 });
 function File(path)
 {
 	Dagger.Object.call(this);
+	_.extend(this,
+	{
+		_needsSave: false,
+		path: null,
+		contents: null,
+		session: null,
+		document: null,
+		path: path
+	});
 
 	if(path)
 		fs.readFile(path, {encoding: "utf8"}, this._onFileRead.bind(this));
-
-	this.path = path;
 }
 
 EditorView.prototype = _.extend(new Dagger.Object(),
 {
-	file: null,
-	editor: null,
-	breakpoints: null,
-	selector: null,
-
 	init: function EditorView_init(selector)
 	{
 		if(selector != undefined)
@@ -389,30 +408,48 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 	open: function EditorView_open(path)
 	{
+		console.log("EditrView closing: ", this.file)
 		this.close();
 
+		console.log("EditrView opening: ", path)
 		this.file = new File(path);
 
-		this.file.listen("load", function()
+		this.file.listen("load", this._onOpen, this);
+	},
+	_onOpen: function EditorView__onOpen(event)
+	{
+		if(!event.error)
 		{
 			this.file.bind(this.editor.getSession());
 
+			this.editor.setReadOnly(this.readOnly || (this.file == null));
 			this.trigger(new Dagger.Event(this, "opened"));
-		}.bind(this));
+		}
+		else
+		{
+			this.close();
+			console.log("error opening file!")
+			this.editor.setReadOnly(this.readOnly || (this.file == null));
+		}
 	},
 
 	close: function EditorView_close()
 	{
 		if(this.file != null)
 		{
+			this.file.ignore("load", this._onOpen, this);
 			this.file.close();
 			this.file = null;
 		}
+
+		//clear the editor
+		this.editor.getSession().setValue("", {renderCall: true});
 	},
 	
 	setReadOnly: function EditorView_setReadOnly(readOnly)
 	{
-		this.editor.setReadOnly(readOnly);
+		this.readOnly = readOnly;
+		this.editor.setReadOnly(this.readOnly || (this.file == null));
 	},
 	getScrollOffset: function EditorView_getScrollOffset()
 	{
@@ -515,10 +552,16 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 function EditorView(selector)
 {
 	Dagger.Object.call(this);
-	this.markers = {};
+	_.extend(this,
+	{
+		markers: {},
+		file: null,
+		editor: null,
+		breakpoints: null,
+		selector: null,
+	});
 
 	this.onToggleBreakpoint = this.onToggleBreakpoint.bind(this);
-	
 	if((this.selector = selector) != undefined)
 		this.init();
 }
@@ -528,7 +571,7 @@ function EditorView(selector)
 
 TabView.prototype = _.extend(new Dagger.Object(),
 {
-	_onFileSelected: function TabView__onFilesChanged(event)
+	_onFileSelected: function TabView__onFileChanged(event)
 	{
 		//find the child of $el that event.path refers to.
 		//  if it doesn't exist, make one and insert it at the beginning
@@ -555,7 +598,7 @@ TabView.prototype = _.extend(new Dagger.Object(),
 			$f.insertAfter(this.$el.children(".tabstart"));
 			this.$currentSelection = $f;
 
-			$f.tooltip({html: true, placement: "bottom", trigger: "hover"});
+			$f.tooltip({html: true, placement: "bottom", trigger: "hover", delay: {show: 1000, hide: 100}});
 		}
 		else
 		{
@@ -574,6 +617,11 @@ TabView.prototype = _.extend(new Dagger.Object(),
 
 	},
 
+	_onFileRemoved: function TabView__onFileRemoved(event)
+	{
+		this.$el.children('[data-path="' + event.path + '"]').remove();
+	},
+
 	_onTabClicked: function TabView__onTabClicked(event)
 	{
 		var $tab = $(event.target);
@@ -583,21 +631,23 @@ TabView.prototype = _.extend(new Dagger.Object(),
 			this.trigger(new Dagger.Event(this, "selected", {path: path.substr(1)}));
 
 		return(false);	//no browser navigation
-	},
-
-	$el: null,
-	$currentSelection: null
+	}
 });
 function TabView(selector, fileManager)
 {
 	Dagger.Object.call(this);
-
+	_.extend(this,
+	{
+		$el: null,
+		$currentSelection: null
+	});
 	this.$el = $(selector);
 	this.$el.click(this._onTabClicked.bind(this));
 
 	this.fileManager = fileManager;
 
 	this.fileManager.listen("navigated", this._onFileSelected, this);
+	this.fileManager.listen("removed", this._onFileRemoved, this);
 }
 
 
@@ -606,6 +656,11 @@ function TabView(selector, fileManager)
 
 FileManager.prototype = _.extend(new Dagger.Object(),
 {
+	needsSave: function FileManager_needsSave()
+	{
+		return(this._needsSave);
+	},
+
 	setEditor: function FileManager_setEditor(editor)
 	{
 		this.editor = editor;
@@ -651,14 +706,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 				this.closeProject();
 			}
 
-			var files = [];
-			for(var i = 0; i < this.project.files.length; i++)
-			{
-				var path = this.resolvePath(this.project.files[i]);
-				files.push({path: path, name: Path.basename(path)});
-			}
-
-			this.filesView.setData(files);
+			var files = this.updateFilesView();
 
 			if(files.length > 0)
 				this.navigate(files[0].path);
@@ -668,6 +716,9 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	
 	saveProject: function FileManager_saveProject(force)
 	{
+		if(this.editor && this.editor.file && this.editor.file.needsSave())
+			this.editor.file.save(true);
+
 		var ths = this;
 		if((this.projectPath == undefined) || !this.project)
 			return;
@@ -737,15 +788,16 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			{
 				f = this.insertFile(this.currentPath);
 
-				this.filesByLRU.unshift(f);
+				this.filesByLRU.unshift(f.path);
 			}
 			else
 			{
 				//update the access time and bump it to the head
 				f.lastAccessed = Date.now();
-				var off = this.filesByLRU.indexOf(f);
-				this.filesByLRU.splice(off, 1);
-				this.filesByLRU.unshift(f);
+				var off = this.filesByLRU.indexOf(f.path);
+				if(off != -1)
+					this.filesByLRU.splice(off, 1);
+				this.filesByLRU.unshift(f.path);
 			}
 			this.editor.open(f.path);
 			
@@ -904,6 +956,9 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 	addFile: function FileManager_addFile(subPath, relativeBase, navigateTo)
 	{
+		if(!subPath)
+			return(console.warn("probably not a valid path: ", subPath));
+
 		var fileEntry = {base: relativeBase, dir: Path.dirname(subPath), name: Path.basename(subPath)};
 		
 		var path = this.resolvePath(fileEntry);
@@ -919,7 +974,9 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			if(this.resolvePath(this.project.files[i]) == path)
 				return;
 
-		this.project.files.push(f);
+		this.project.files.push(fileEntry);
+		this.saveProject();
+		this.updateFilesView();
 
 		if(navigateTo == false)
 			return;
@@ -931,19 +988,25 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	removeFile: function FileManager_removeFile(path)
 	{
 		if(path == this.currentPath)	//navigate away first
-			this.navigate((this.filesByLRU[0] == this.currentPath)? this.filesByLRU[1] : this.filesByLRU[0]);
+			this.navigate(this.filesByLRU[1]);
 
 		//find the file
 		for(var i = 0; i < this.project.files.length; i++)
 			if(this.resolvePath(this.project.files[i]) == path)
 			{
 				this.project.files.splice(i, 1);	//delete the file from the project, not the file itself
+				this.updateFilesView();
+				this.trigger(new Dagger.Event(this, "removed", {path: path}));
+				this.saveProject();
 				break;
 			}
 	},
 
 	resolvePath: function FileManager_resolvePath(projectFileEntity)
 	{
+		if(projectFileEntity == undefined)
+			return(undefined);
+
 		var base = projectFileEntity.base || "project";
 
 		if(this.pathsTable[base] == undefined)
@@ -955,24 +1018,36 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 							)
 				);
 	},
+	updateFilesView: function FileManager_updateFilesView()
+	{
+		var files = [];
+		for(var i = 0; i < this.project.files.length; i++)
+		{
+			var path = this.resolvePath(this.project.files[i]);
+			files.push({path: path, name: Path.basename(path)});
+		}
 
-	editor: null,
-	currentPath: null,
-	filesByPath: null,
-	filesByLRU: null,
-	stoppedPoint: null,
+		this.filesView.setData(files);
 
-	projectPath: undefined,
-	project: null,
-	_needsSave: false
+		return(files);
+	}
 });
 function FileManager(pathsTable, editor, filesView)
 {
 	Dagger.Object.call(this);
-	this.currentPath = undefined;
-	this.filesByPath = {};
-	this.filesByLRU = [];
-	this.pathsTable = pathsTable;
+	_.extend(this,
+	{
+		editor: null,
+		currentPath: undefined,
+		filesByPath: {},
+		filesByLRU: [],
+		stoppedPoint: null,
+		pathsTable: pathsTable,
+		projectPath: undefined,
+		project: null,
+		_needsSave: false
+	});
+	
 	this.setEditor(editor);
 	this.setFilesView(filesView);
 }
@@ -1093,10 +1168,16 @@ VarView.prototype =
 function VarView(selector, deferredEvaluator)
 {
 	Dagger.Object.call(this);
+	_.extend(this,
+	{
+		$el: null,
+		$tree: null,
+		tree: null,
+		deferredEval: deferredEvaluator
+	});
 	this.$el = $(selector);
 	this.$tree = $(".tree", this.$el);
 	this.tree = new YAHOO.widget.TreeView(this.$tree[0]);
-	this.deferredEval = deferredEvaluator;
 }
 
 
@@ -1124,9 +1205,6 @@ function VarView(selector, deferredEvaluator)
 
 ListView.prototype = _.extend(new Dagger.Object(),
 {
-	$el: null,
-	$list: null,
-
 	setData: function ListView_setData(data)
 	{
 		this.clear();
@@ -1167,12 +1245,20 @@ ListView.prototype = _.extend(new Dagger.Object(),
 function ListView(selector, optionalRenderer)
 {
 	Dagger.Object.call(this);
+	_.extend(this,
+	{
+		$el: null,
+		$list: null,
+		$addButton: null,
+	});
+
 	this.$el = $(selector);
 	this.$list = $("ul", this.$el);
+	this.$addButton = $(".addButton", this.$el);	//doesn't always have one
+
 	if(optionalRenderer)
 		this._render = optionalRenderer;
 
-	this.$addButton = $(".addButton", this.$el);	//doesn't always have one
 	this.$addButton.click(function(){return(this._onAdd());}.bind(this));
 }
 
@@ -1253,7 +1339,8 @@ FilesView.prototype = _.extend(new ListView(),
 		var html = $("#addFileDialog").html();
 		DialogView("Add File to Project", html, function(success, data)
 		{
-			this.trigger(new Dagger.Event(this, "addFile", {name: data.name, base: data.base}));
+			if(success && (data.name.trim) && !(data.name.match(/\.\./)))
+				this.trigger(new Dagger.Event(this, "addFile", {name: data.name, base: data.base}));
 		}, this);
 	},
 	setData: function FilesView_setData(data)
@@ -1467,15 +1554,18 @@ Button.prototype = _.extend(new Dagger.Object(),
 	{
 		if(this.action !== false)
 			this.trigger(new Dagger.Event(this, "action", {action: this.action}));
-	},
-
-	$el: null,
-	action: null,
-	symbol: null
+	}
 });
 function Button(selector)
 {
 	Dagger.Object.call(this);
+	_.extend(this,
+	{
+		$el: null,
+		action: null,
+		symbol: null
+	});
+
 	this.$el = $(selector);
 	this.symbol = $("span", this.$el).attr("class");
 	this.$el.click(this._onClick.bind(this));
@@ -1802,8 +1892,8 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			{
 				this.setAllButtonsEnabled(false);
 				
-				if(this.editor.file.needsSave())
-					this.editor.file.save(true);
+				if(this.fileManager.needsSave())
+					this.fileManager.saveProject(true);
 				
 				this.codeTalker.build(this.fileManager.getProjectPath(), function(err, elf, result)
 				{
@@ -1955,27 +2045,27 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.debugPauseButton.setEnabled(enabled);
 		this.stopButton.setEnabled(enabled);
 	},
-
-	runState: null,
-	breakpointTable: null,
-
-	codeTalker: null,
-	
-	fileManager: null,
-	editor: null,
-	stackView: null,
-	varView: null,
-	tabs: null,
-
-	verifyRestartButton: null,
-	runContinueButton: null,
-	debugPauseButton: null,
-	stopButton: null
 });
 function IDE()
 {
-	this.runState = null;
-	this.breakpointTable = [];
+	_.extend(this,
+	{
+		runState: null,
+		breakpointTable: [],
+
+		codeTalker: null,
+		
+		fileManager: null,
+		editor: null,
+		stackView: null,
+		varView: null,
+		tabs: null,
+
+		verifyRestartButton: null,
+		runContinueButton: null,
+		debugPauseButton: null,
+		stopButton: null
+	});
 }
 
 $(function()
