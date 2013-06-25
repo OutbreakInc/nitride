@@ -1,263 +1,9 @@
-/*
-
-Models = Dagger.DefineRelatedModels(
-{
-	User: Dagger.DefineModel(
-		{
-			id: String,
-			username: String
-		},
-		{
-			toString: function()
-			{
-				return("A huge dork");	//debug
-			},
-			init: function(data)
-			{
-				console.log("User init with: ", data);
-				_.extend(this, data);
-			},
-			load: function()
-			{
-			}
-		}),
-		
-	File: Dagger.DefineModel(
-		{
-			path: String,
-			contents: String,
-			open: Number,
-			modified: Date
-		},
-		{
-		}),
-
-	Navigation: Dagger.DefineModel(
-		{
-			projects: [
-				{
-					title: String,
-					href: String
-				}
-			]
-		},
-		{
-		}),
-	
-	News: Dagger.DefineModel(
-		{
-			posted: Date,
-			author: "User",
-			title: String,
-			body: String
-		},
-		{
-		}),
-		
-	Project: Dagger.DefineModel(
-		{
-			name: String,
-			path: String,
-			files: ["File"],
-			openFiles: ["File"],
-			modified: Date
-		},
-		{
-		}),
-
-	Home: Dagger.DefineModel(
-		{
-			recentNews: ["News"],
-			projects: ["Project"],
-			projectSearch: String,
-			currentProject: "Project"
-		},
-		{
-		})
-});
-
-function Render()
-{
-	this.render();
-}
-
-Views =
-{
-	ProjectTabs: Dagger.DefineView(
-		{
-			template: "topNavigation",
-			dataEvents:
-			{
-				changed: Render
-			},
-			show: function(file)
-			{
-				console.log("Might shuffle tabs to make sure ", file, " is showing.");
-			}
-		}),
-
-	ProjectSettingsMenu: Dagger.DefineView(
-		{
-			template: "dropdownMenuItems",
-			dataEvents:
-			{
-				changed: Render
-			},
-		}),
-
-	Project: Dagger.DefineView(
-		{
-			template: "#editor",
-			dataEvents:
-			{
-				changed: Render
-			},
-			init: function()
-			{
-				this._super.init.apply(this, arguments);
-				
-				this.tabs = new Views.ProjectTabs(this.data && this.data.openFiles);
-				this.allFiles = new Views.ProjectSettingsMenu(this.data && this.data.openFiles);
-
-				window.$("#homeButton").click(this.closeProject.bind(this));
-
-				//open the main file @@replace with stored session data
-
-				this.openFile("main.cpp");
-			},
-			setData: function(data)
-			{
-				console.log("setData: ", data);
-				this._super.setData.apply(this, arguments);
-				if(this.data)
-				{
-					this.tabs.setData(this.data.openFiles);
-					this.allFiles.setData(this.data.openFiles);
-				}
-			},
-			openFileByPath: function(path)
-			{
-				for(var f in this.data.openFiles)
-					if(f.path == path)
-						return(this.tabs.show(f));	//ensure the already-open file is visible in the tabset
-
-				var f = new Models.File(path);
-				this.data.openFiles.push(f);	//put the file in the open list
-				this.tabs.show(f);				//and ensure it's visible in the tabset
-			},
-			closeProject: function()
-			{
-				console.log("closing project, navigating back to home");
-			},
-		}),
-
-	Blog: Dagger.DefineView(
-		{
-			template: "blog",
-			dataEvents:
-			{
-				changed: Render
-			}
-		}),
-	ProjectThumb: Dagger.DefineView(
-		{
-			template: "homeThumbnail",
-			dataEvents:
-			{
-				changed: Render
-			}
-		}),
-
-	Home: Dagger.DefineView(
-		{
-			template: "#home",
-			
-			blogView: null,
-			projectThumbView: null,
-
-			dataEvents:
-			{
-				changed: Render
-			},
-
-			init: function(data)
-			{
-				this._super.init.apply(this, arguments);
-				
-				this.blogView = new Views.Blog(this.data.recentNews);
-				this.projectThumbView = new Views.ProjectThumb(this.data.projects);
-
-				window.$("#projectSearch").change(this.onProjectSearchChange.bind(this))
-					.keydown(this.onProjectSearchChange.bind(this));
-			},
-			deinit: function(data)
-			{
-				window.$("#projectSearch").unbind("change");
-
-				this.blogView.deinit();
-				this.projectThumbView.deinit();
-
-				this._super.deinit.apply(this, arguments);
-			},
-			render: function()
-			{
-				console.log("rendering home with data: ", this.data);
-			},
-			onProjectSearchChange: _.debounce(function(e)
-			{
-				console.log(e);
-			}, 300),
-		}),
-};
-
-Dagger.DefineHelpers();
-
-//this view instance exists outside any section of the site
-//var navView = new Views.Navigation(new Models.Navigation());
-
-var homeView = new Views.Home(new Models.Home(
-{
-	recentNews:
-	[
-		{
-			posted: new Date(),
-			author: {id: "1"},
-			title: "announcement",
-			body: "some news, yall"
-		}
-	],
-	projects:
-	[
-		{
-			name: "test",
-			path: "/path/to/project",
-			files: [
-			{
-				path: "main.cpp",
-				contents: "main(void){}",
-				open: 1,
-				modified: new Date()
-			}],
-			openFiles: [
-			{
-				path: "main.cpp"
-			}],
-			modified: new Date()
-		}
-	]
-}));
-*/
-
-//navView.data.set({projects:[{title:"main.cpp", href:"#/test/main.cpp"}, {title:"GalagoAPI.cpp", href:"#/logiblock+platform/galago/GalagoAPI.cpp"}]});
-
-//homeView.data.recentNews.push(new Models.News({title:"announcement", author:{id: "1"}, body:"hello world!"}));
-//homeView.data.projects.push(new Models.Project({name:"hello", date:"yesterday"}));
-
 process.on("uncaughtException", function(exception)
 {
-	console.log("Clouds are annoying, yall: ", exception);
+	console.log("Clouds are annoying, y'all: ", exception.stack);
 });
 
+//webkit requirements
 var aceRange = ace.require("ace/range").Range;
 var aceCppMode = ace.require("ace/mode/c_cpp").Mode;
 var AceEditSession = ace.require("ace/edit_session").EditSession;
@@ -268,6 +14,27 @@ var AceRange = ace.require("ace/range").Range;
 var fs = require("fs");
 var Path = require("path");
 var CodeTalker = require("./codetalker");
+var Config = require("./Config");
+
+
+//why require("mkdirp") when you can implement it so elegantly?
+function mkdirp(path, callback)
+{
+	var self = arguments.callee;
+	fs.exists(path, function(exists)
+	{
+		if(!exists)
+			self(Path.dirname(path), function(err)	//if it doesn't exist, ensure the parent does
+			{
+				if(err)	callback(err);
+				else	fs.mkdir(path, callback);	//if the parent exists, create the child
+			});
+		else
+			callback();
+	});
+};
+
+
 
 File.prototype = _.extend(new Dagger.Object(),
 {
@@ -384,8 +151,6 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 		this.editor = ace.edit($(this.selector)[0]);
 
-		//this.el.style.fontSize = "11px";
-
 		this.editor.on("guttermousedown", this.onToggleBreakpoint);
 		
 		with(this.editor)
@@ -408,10 +173,8 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 	open: function EditorView_open(path)
 	{
-		console.log("EditrView closing: ", this.file)
 		this.close();
 
-		console.log("EditrView opening: ", path)
 		this.file = new File(path);
 
 		this.file.listen("load", this._onOpen, this);
@@ -428,7 +191,7 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 		else
 		{
 			this.close();
-			console.log("error opening file!")
+			console.warn("Error opening file!")
 			this.editor.setReadOnly(this.readOnly || (this.file == null));
 		}
 	},
@@ -470,7 +233,7 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 		if(file != this.file.path)
 			return;
 		
-		var gutter = false;
+		var style, gutter = false;
 		switch(type)
 		{
 		case "breakpoint":				style = "ace_breakpoint";	gutter = true;	break;
@@ -532,19 +295,8 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 		var row = event.getDocumentPosition().row;
 
-		// rows are zero-indexed, lines are not
-		var line = row + 1;
-		
-		/*
-		if(this.breakpoints[line])
-			this.removeBreakpoint(this.file.path, line);
-		else
-		{
-			this.editor.session.setBreakpoint(row, "ace_breakpoint_unconfirmed");
-			this.breakpoints[line] = true;
-		*/
-		
-		this.trigger(new Dagger.Event(this, "toggleBreakpoint", {path: this.file.path, line: line}));
+		//note that lines are 1-indexed while rows are from 0
+		this.trigger(new Dagger.Event(this, "toggleBreakpoint", {path: this.file.path, line: row + 1}));
 
 		event.stop();
 	},
@@ -571,6 +323,14 @@ function EditorView(selector)
 
 TabView.prototype = _.extend(new Dagger.Object(),
 {
+	setData: function TabView_setData(data)
+	{
+		if(data == undefined)
+			this.$el.children().not(".tabstart").remove();
+
+		//um... @@refactor
+	},
+
 	_onFileSelected: function TabView__onFileChanged(event)
 	{
 		//find the child of $el that event.path refers to.
@@ -604,7 +364,7 @@ TabView.prototype = _.extend(new Dagger.Object(),
 		{
 			//select the tab
 			(this.$currentSelection = $f).addClass("active");
-			
+
 			//if not fully visible (allowing 10px margin of fuzziness)
 			if($f[0].getBoundingClientRect().right > (this.$el[0].getBoundingClientRect().right + 10))
 			{
@@ -613,8 +373,7 @@ TabView.prototype = _.extend(new Dagger.Object(),
 			}
 		}
 
-		//@@ trim children to some number higher than the max visible, like 25
-
+		//@@ trim children to some number higher than the max visible, like 25?
 	},
 
 	_onFileRemoved: function TabView__onFileRemoved(event)
@@ -652,7 +411,7 @@ function TabView(selector, fileManager)
 
 
 
-// FileManager
+//FileManager is the (incorrectly-named) Project object
 
 FileManager.prototype = _.extend(new Dagger.Object(),
 {
@@ -673,7 +432,6 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		this.filesView.listen("addFile", function(e)
 		{
-			console.log("adding file to project from user request...");
 			this.addFile(e.name, e.base);
 		}, this);
 
@@ -742,13 +500,13 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		this._needsSave = false;
 
-		console.log("will save project now.");
+		console.log("Saving project...");
 		fs.writeFile(	Path.join(this.projectPath, "module.json"),
 						JSON.stringify(this.project),
 						{encoding: "utf8"},
 						function(err)
 		{
-			console.log("project written!");
+			console.log("Project saved.");
 		});
 	},
 	closeProject: function FileManager_closeProject()
@@ -1181,28 +939,6 @@ function VarView(selector, deferredEvaluator)
 }
 
 
-//test data
-/*var vars =
-[
-	{name: "num", type: "int", value: 1048576},
-	{name: "numptr", type: "int*", value: 0x10001234, children: 1048576},
-	{name: "job", type: "Galago::Task", children: [{name: "_t", type: "InternalTask*", value: 0x10001234, children: true}]},
-	{name: "buf", type: "Galago::Buffer", children: [{name: "_b", type: "InternalBuffer*", value: 0x10001234, children: true}]},
-	{name: "p4", type: "Galago::IO::Pin", children: [{name: "_b", type: "InternalBuffer*", value: 0x10001234, children: true}]},
-	{name: "string1", type: "char const*", value: 0x10001234, children: "herp derp"},
-	{name: "string2", type: "char const*", value: 0, children: true},
-	{name: "nullptr", type: "ComplexStruct const*", value: 0},
-	{name: "validptr", type: "ComplexStruct const*", value: 0x10001234, children: [{name: "a", type: "int", value: 5}]},
-	{name: "deferredptr", type: "ComplexStruct const*", value: 0x10001234, children: true},
-];*/
-
-//varView.setData(vars);
-
-
-
-
-
-
 ListView.prototype = _.extend(new Dagger.Object(),
 {
 	setData: function ListView_setData(data)
@@ -1253,7 +989,7 @@ function ListView(selector, optionalRenderer)
 	});
 
 	this.$el = $(selector);
-	this.$list = $("ul", this.$el);
+	this.$list = $("ul.list", this.$el);
 	this.$addButton = $(".addButton", this.$el);	//doesn't always have one
 
 	if(optionalRenderer)
@@ -1336,8 +1072,7 @@ FilesView.prototype = _.extend(new ListView(),
 	},
 	_onAdd: function FilesView__onAdd(event)
 	{
-		var html = $("#addFileDialog").html();
-		DialogView("Add File to Project", html, function(success, data)
+		DialogView("Add File to Project", $("#addFileDialog").html(), function(success, data)
 		{
 			if(success && (data.name.trim) && !(data.name.match(/\.\./)))
 				this.trigger(new Dagger.Event(this, "addFile", {name: data.name, base: data.base}));
@@ -1413,6 +1148,12 @@ ProblemsView.prototype = _.extend(new ListView(),
 			$line.addClass("even");
 			this.$list.append($line);
 		}
+		else if(this.data == true)	//special functionality
+		{
+			var $line = $('<span class="spinning"/> <em>Building...</em></li>');
+			$line.addClass("even");
+			this.$list.append($line);
+		}
 	},
 });
 function ProblemsView(selector)
@@ -1470,9 +1211,6 @@ function DialogView(title, html, callback, context)
 		$($("input", $el)[0]).focus();
 	});	//show it
 }
-
-
-//<p>File</p><form id="dialogForm"><input name="newName" type="text" placeholder="filename.cpp"></input></form>
 
 
 //resizable sidebar
@@ -1552,8 +1290,9 @@ Button.prototype = _.extend(new Dagger.Object(),
 
 	_onClick: function Button__onClick(event)
 	{
+		this.$el.popover("hide");
 		if(this.action !== false)
-			this.trigger(new Dagger.Event(this, "action", {action: this.action}));
+			this.trigger(new Dagger.Event(this, "action", {action: this.action, modified: event.shiftKey || event.altKey}));
 	}
 });
 function Button(selector)
@@ -1569,9 +1308,248 @@ function Button(selector)
 	this.$el = $(selector);
 	this.symbol = $("span", this.$el).attr("class");
 	this.$el.click(this._onClick.bind(this));
+
+	var $docs = $('.documentation[data-for="' + this.$el.attr("id") + '"]');
+	if($docs.length > 0)
+		this.$el.popover(
+		{
+			html: true,
+			placement: "bottom",
+			trigger: "hover",
+			title: $(".title", $docs).html(),
+			content: $(".body", $docs).html(),
+			delay: {show: 1000, hide: 100},
+			container: "#editor"
+		});
 }
 
 
+
+DebugTerminal.prototype = _.extend(new Dagger.Object(),
+{
+	show: function DebugTerminal_show()
+	{
+		if(this.terminalWindow)
+			return;
+
+		this.terminalWindow = window.open("Terminal.html");
+
+		this.window = gui.Window.get(this.terminalWindow);
+
+		this.window.on("loaded", function()
+		{
+			this.terminalWindow.callback = function(command, term, callback)
+			{
+				ide.codeTalker.gdbCommand(command, function(error, messages)
+				{
+					if(error)
+						term.echo(error.toString());
+					else
+						term.echo(messages);
+
+					callback();
+				});
+			}.bind(this);
+		}.bind(this));
+
+		this.window.on("closed", function()
+		{
+			this.terminalWindow = null;
+		}.bind(this));
+	}
+});
+function DebugTerminal(ide)
+{
+	this.ide = ide;
+
+	this.show();
+}
+
+
+
+SettingsManager.prototype = _.extend(new Dagger.Object(),
+{
+	setListView: function SettingsManager_setListView(view)
+	{
+		(this.views || (this.views = [])).push(view);
+
+		this.listen("change", function()
+		{
+			view.setData(this.settings.recentProjects);
+		}, this);
+	},
+	load: function SettingsManager_load()
+	{
+		fs.readFile(Path.join(this.path, "settings.json"), function(error, contents)
+		{
+			if(error)
+				this.settings = {};
+			else
+				try
+				{
+					this.settings = JSON.parse(contents);
+				}
+				catch(err)
+				{
+					console.warn("Cannot parse settings json! Re-initializing.");
+					this.settings = {};
+				}
+
+			this.trigger(new Dagger.Event(this, "change"));
+
+		}.bind(this));
+	},
+	save: function SettingsManager_save()
+	{
+		mkdirp(this.path, function(err)
+		{
+			if(err)
+				return(console.warn("Can't save project settings, must fly-by-night."));
+
+			fs.writeFile(Path.join(this.path, "settings.json"), JSON.stringify(this.settings), {encoding: "utf8"}, function(error)
+			{
+				//this.trigger(new Dagger.Event(this, "save", {error: !!error}));
+			}.bind(this));
+
+		}.bind(this));
+	},
+
+	addProject: function SettingsManager_addProject(name, description)
+	{
+		//try to create it
+		var projectBase = Path.join(Config.projectsDir(), name);
+		mkdirp(projectBase, function(err)
+		{
+			if(err)
+				return(console.warn("Error: could not create project: ", err));
+
+			//create the project
+			fs.writeFile(Path.join(projectBase, "module.json"), JSON.stringify(
+			{
+				name: name,
+				files: [{name: "main.cpp"}],
+				description: description || "",
+				version: "0.1",
+				compatibleWith: ["Galago4"],
+				dependencies: []
+			}),
+			function(err)
+			{
+				if(err)
+					return(console.warn("Error: could not create project: ", err));
+
+				fs.writeFile(Path.join(projectBase, "main.cpp"), "#include <GalagoAPI.h>\nusing namespace Galago;\n\nint main(void)\n{\n\twhile(true)\n\t\tsystem.sleep();\n}\n", function(err)
+				{
+					if(err)
+						return(console.warn("Error: could not create project: ", err));
+
+					//create and add the project to the IDE settings
+					(this.settings.recentProjects || (this.settings.recentProjects = [])).push(
+					{
+						name: name,
+						lastPath: projectBase,
+						modifiedTime: Date.now()
+					});
+					this.trigger(new Dagger.Event(this, "change"));
+
+				}.bind(this));
+
+			}.bind(this));
+
+		}.bind(this));
+	},
+	touchProject: function SettingsManager_touchProject(name)
+	{
+		if(this.settings.recentProjects)
+			for(var i = 0; i < this.settings.recentProjects.length; i++)
+				if(this.settings.recentProjects[i].name == name)
+				{
+					this.settings.recentProjects[i].modifiedTime = Date.now();
+					this.trigger(new Dagger.Event(this, "change"));
+					break;
+				}
+	},
+	removeProject: function SettingsManager_removeProject(name)
+	{
+		if(this.settings.recentProjects)
+			for(var i = 0; i < this.settings.recentProjects.length; i++)
+				if(this.settings.recentProjects[i].name == name)
+				{
+					this.settings.recentProjects.slice(i, 1);
+					this.trigger(new Dagger.Event(this, "change"));
+					break;
+				}
+	},
+});
+function SettingsManager(pathsTable)
+{
+	this.pathsTable = pathsTable;
+	this.path = Config.settingsDir();
+
+	this.listen("change", function()	//pub/sub to the max
+	{
+		this.save();
+	}, this);
+}
+
+
+
+
+
+RecentProjectsView.prototype = _.extend(new ListView(),
+{
+	_render: function RecentProjectsView__render(item, index, data)
+	{
+		var $thumb = $("<li/>");
+		
+		var date = "";
+		var age = (Date.now() - item.modifiedTime) / 1000;
+		if(age < 60)
+			date = "just now";
+		else if(age < 3600)
+			date = this._formatUnit(parseInt((age + 59) / 60), "minute", "minutes") + " ago";
+		else if(age < 86400)
+			date = this._formatUnit(parseInt((age + 3599) / 3600), "hour", "hours") + " ago";
+		else if(age < 172800)
+			date = "yesterday";
+		else if(age < 604800)
+			date = this._formatUnit(parseInt((age + 86399) / 86400), "day", "days") + " ago";
+		else if(age < 4838400)
+			date = this._formatUnit(parseInt((age + 604799) / 604800), "week", "weeks") + " ago";
+		else
+		{
+			var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+			var d = Date(item.modifiedTime);
+			date = months[d.getMonths()] + " " + (d.getYear() + 1900).toString();
+		}
+
+		$thumb.html('<li class="thumbnail projectThumb"><h3>' + item.name + '</h3><small>' + date + '</small></li>');
+		$thumb.attr("data-index", item.lastPath);
+		
+		return($thumb);
+	},
+
+	//English-language singlar/plural rule
+	_formatUnit: function RecentProjectsView__formatUnit(qty, singular, plural)
+	{
+		return(qty.toString() + " " + ((qty == 1)? singular : plural));
+	},
+
+	setData: function RecentProjectsView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $item = $('<li class="thumbnail projectThumb"><h3><em>No projects!</em></h3><small>Click the New button above to create one.</small></li>');
+			this.$list.append($item);
+		}
+	}	
+});
+function RecentProjectsView(selector)
+{
+	ListView.apply(this, arguments);
+}
 
 
 
@@ -1583,10 +1561,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.codeTalker = codeTalker;
 
 		this.editor = new EditorView("#aceView");
-		//editor.open("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp");
 
 		this.filesView = new FilesView("#files");
 		
+		this.settingsManager = new SettingsManager(this.codeTalker.getPaths());
+
 		this.fileManager = new FileManager(this.codeTalker.getPaths(), this.editor, this.filesView);
 
 		this.tabs = new TabView("#tabs", this.fileManager);
@@ -1598,10 +1577,22 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.problemsView = new ProblemsView("#problems");
 		this.problemsView.setData();
 
+		this.recentProjectsView = new RecentProjectsView("#recentProjects");
+
 		this.verifyRestartButton = new Button("#verifyRestart");
 		this.runContinueButton = new Button("#runContinue");
 		this.debugPauseButton = new Button("#debugPause");
 		this.stopButton = new Button("#stop");
+
+		this.deviceView.setData();
+
+		this.settingsManager.setListView(this.recentProjectsView);
+		this.recentProjectsView.listen("selected", function(e)
+		{
+			this.openProject(e.index);
+		}, this);
+
+		this.settingsManager.load();
 
 		this.tabs.listen("selected", function(e)
 		{
@@ -1619,12 +1610,13 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		this.codeTalker.listen("runstate", this.onRunStateChange.bind(this));
 
+		/*
 		this.codeTalker.listen("breakpointsChanged", function(breakpoints)
 		{
-
+			//NYI
 		}.bind(this));
+		*/
 
-		//we don't care as much about the "plug" event because it doesn't make us stop debugging!
 		this.codeTalker.listen("deviceStatus", this.onDeviceChange.bind(this));
 		this.codeTalker.listen("devicePlug", this.onDeviceChange.bind(this));
 		
@@ -1632,8 +1624,6 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		this.fileManager.listen("addBreakpoint", function(event)
 		{
-			console.log(event);
-
 			//try to find a matching entry in breakpointTable
 			for(var i in this.breakpointTable)
 				if((this.breakpointTable[i].path == event.path) && (this.breakpointTable[i].line == event.line))
@@ -1645,12 +1635,10 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					return(this.fileManager.removeBreakpoint(event.path, event.line));
 				
 				this.breakpointTable.push({path: event.path, line: event.line, num: breakpointNum});
-				console.log("add ok");
 				
 				//delayed by 500ms for demonstration purposes
 				setTimeout(function()
 				{
-					console.log("confirm ok");
 					this.fileManager.addBreakpoint(event.path, event.line, "breakpoint");
 				}.bind(this), 500);
 
@@ -1659,8 +1647,6 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		this.fileManager.listen("removeBreakpoint", function(event)
 		{
-			console.log(event);
-			
 			//try to find a matching entry in breakpointTable
 			var breakpointIdx;
 			for(var i in this.breakpointTable)
@@ -1675,12 +1661,10 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.codeTalker.removeBreakpoint(this.breakpointTable[breakpointIdx].num, function(error)
 			{
 				if(error)
-					return;	//um?
+					return(console.warn("Unable to remove breakpoint."));	//um?
 
 				this.breakpointTable.splice(breakpointIdx, 1);
 				this.fileManager.removeBreakpoint(event.path, event.line);
-
-				console.log("remove ok");
 			}.bind(this));
 		}.bind(this));
 
@@ -1690,13 +1674,32 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.stopButton.listen("action", this.onButtonStateChange, this);
 
 
+		$("#createProject").click(function(e)
+		{
+			this.showCreateProjectDialog();
 
-		//finally, enter the root state
-		this.setRunState("editing");
+			e.preventDefault();
+			return(false);
+		}.bind(this));
 
-		//@@demo
-		this.fileManager.openProject("/Users/kuy/Projects/Galago/ide/ardbeg/testProject");
-		//this.fileManager.navigate("/Users/kuy/Projects/Galago/ide/ardbeg/testProject/ideTest.cpp", 20);
+		$("#gdbConsole").click(function(e)
+		{
+			if(this.gdbConsole == undefined)
+				this.gdbConsole = new DebugTerminal(this);
+			else
+				this.gdbConsole.show();
+
+			e.preventDefault();
+		}.bind(this));
+
+		$("#homeButton").click(function(e)
+		{
+			this.goHome();
+		}.bind(this));
+
+
+		//finally, enter the home screen
+		this.goHome();
 	},
 
 	onDeviceSelect: function IDE_onDeviceSelect(event)
@@ -1729,16 +1732,13 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			{
 				this.devicePort = undefined;
 
-				//must resign debug session
+				//must resign debug session if the active device was removed
 				switch(this.runState)
 				{
 				case "running":
 				case "stopped":
-					console.log("unplugged the device we were debugging with!");
+					console.warn("Unplugged the device we were debugging with!");
 					this.setRunState("editing");
-					break;
-				default:
-					console.log("unplugged the device we had selected.");
 					break;
 				}
 			}
@@ -1747,8 +1747,16 @@ IDE.prototype = _.extend(new Dagger.Object(),
 	},
 
 
+	//respond to GDB-initiated state changes
 	onRunStateChange: function IDE_onRunStateChange(status)
 	{
+		//in certains states, intentionally ignore GDB state changes
+		switch(this.runState)
+		{
+		case "flashing":
+			return;
+		}
+
 		switch(status.state)
 		{
 		case "stopped":
@@ -1776,7 +1784,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				else if((callstack.length > 0) && (callstack[0].path))
 					this.fileManager.navigate(callstack[0].path, callstack[0].line);
 				else
-					console.log("nowhere to go");
+					console.warn("We're stopped, but I don't know where!");
 
 				//update variables for that frame (also highlights the right frame in the stack view)
 				this.updateVarsForFrame();
@@ -1818,6 +1826,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		{
 		case "running":
 		case "stopped":
+		case "flashing":
 			$("#sidebarSections").children().hide().filter(".visibleDebug").show();
 			this.editor.setReadOnly(true);
 			
@@ -1835,12 +1844,19 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		{
 		case "editing":
 			this.verifyRestartButton.setSymbol("ok").setAction("building");
-			this.runContinueButton.setSymbol("play").setAction("running");
-			this.debugPauseButton.setSymbol("pause").setAction("stopped");
+			this.runContinueButton.setSymbol("play").setAction(this.firmwareImage? "running" : false);
+			this.debugPauseButton.setSymbol("pause").setAction(this.firmwareImage? "stopped" : false);
 			this.stopButton.setSymbol("eject").setAction(false);
 			break;
 
 		case "building":
+			this.verifyRestartButton.setSymbol("ok").setAction(false);
+			this.runContinueButton.setSymbol("play").setAction(false);
+			this.debugPauseButton.setSymbol("pause").setAction(false);
+			this.stopButton.setSymbol("eject").setAction(false);	//@@support cancelling a build?
+			break;
+
+		case "flashing":
 			this.verifyRestartButton.setSymbol("ok").setAction(false);
 			this.runContinueButton.setSymbol("play").setAction(false);
 			this.debugPauseButton.setSymbol("pause").setAction(false);
@@ -1851,7 +1867,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.verifyRestartButton.setSymbol("repeat").setAction(false);
 			this.runContinueButton.setSymbol("play").setAction(false);
 			this.debugPauseButton.setSymbol("pause").setAction("stopped");
-			this.stopButton.setSymbol("eject").setAction("editing");
+			this.stopButton.setSymbol("eject").setAction(false);	//@@need to enable this but gdb limits us
 			break;
 
 		case "stopped":
@@ -1876,6 +1892,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			{
 			case "running":
 			case "stopped":
+			case "flashing":
 				this.setAllButtonsEnabled(false);
 				
 				this.codeTalker.disconnect(function(error)
@@ -1890,26 +1907,40 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			//only if we're in editing mode, build the project
 			if(this.runState == "editing")
 			{
-				this.setAllButtonsEnabled(false);
+				this.setRunState("building");
 				
 				if(this.fileManager.needsSave())
 					this.fileManager.saveProject(true);
 				
+				this.problemsView.setData(true);	//special functionality to show build progress
+				
+				this.firmwareImage = undefined;
 				this.codeTalker.build(this.fileManager.getProjectPath(), function(err, elf, result)
 				{
 					console.log("Build complete, results: ", arguments);
 
-					this.setAllButtonsEnabled(true);
-					
-					if(err)
-						return(console.warn("Totally failed to build."));
+					if(!err)
+					{
+						this.problemsView.setData(result.compileErrors);
 
-					this.problemsView.setData(result.compileErrors);
+						if(!result.compileErrors || (result.compileErrors.length == 0))
+							this.codeTalker.setELF(elf, function(error)
+							{
+								console.log("Set firmware to: ", elf, (error? "unsuccessfully" : "successfully"));
+								if(!error)
+									this.firmwareImage = elf;
 
-					if(result.compileErrors && (result.compileErrors.length > 0))
-						this.firmwareImage = undefined;
+								this.setRunState("editing");
+
+							}.bind(this));
+						else
+							this.setRunState("editing");
+					}
 					else
-						this.firmwareImage = elf;
+					{
+						console.warn("Totally failed to build.");
+						this.setRunState("editing");
+					}
 
 				}.bind(this), 1000);
 			}
@@ -1925,7 +1956,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.log("Error: ", error);
+						console.warn("Error: ", error, error.stack);
 					}
 				}.bind(this));
 			}
@@ -1951,13 +1982,14 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			{
 				this.setAllButtonsEnabled(false);
 				
-				//ugly hack just to ensure we connect with a proper device
+				//ugly hack just to ensure we connect with a proper device //@@necessary???
 				if(this.devicePort == undefined)
 					this.devicePort = this.deviceView.data[0].gdbPort;
 
 				if(this.devicePort == undefined)
 					break;
 
+				this.setRunState("flashing");
 				this.codeTalker.connect(this.devicePort, function(error)
 				{
 					if(error)
@@ -1967,18 +1999,35 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						return;
 					}
 					
-					//@@if the firmware is newer than the last image we installed
-					//  flash it
+					//@@only flash if the firmware is newer than the last image we installed
 
-					this.codeTalker.run(function(error)
+					this.codeTalker.flash(function(err)
 					{
-						if(error)
+						if(!err)
 						{
+							//if a modifier key is held down when the button is clicked,
+							//  stop on the first instruction (i.e. don't run)
 							this.setRunState("stopped");
-							console.log("Error: ", error);
+							if(!event.modified)
+							{
+								this.codeTalker.run(function(error)
+								{
+									if(error)
+									{
+										this.setRunState("stopped");
+										console.log("Failed to continue! Error: ", error);
+									}
+									//else codetalker signals the correct run-time state transition
+								}.bind(this));
+							}
 						}
-						//else codetalker signals the correct state transition
+						else
+						{
+							this.setRunState("editing");
+							console.log("Failed to flash! Error: ", error);
+						}
 					}.bind(this));
+
 				}.bind(this));
 			}
 			break;
@@ -2045,6 +2094,37 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.debugPauseButton.setEnabled(enabled);
 		this.stopButton.setEnabled(enabled);
 	},
+
+
+
+	goHome: function IDE_goHome()
+	{
+		$("#editor").hide();
+		this.fileManager.closeProject();
+		this.tabs.setData();	//@@hackish
+
+		$("#home").show();
+	},
+
+	openProject: function IDE_openProject(projectPath)
+	{
+		$("#home").hide();
+
+		this.setRunState("editing");
+		this.fileManager.openProject(projectPath);
+		
+		$("#editor").show();
+	},
+
+	showCreateProjectDialog: function IDE_showCreateProjectDialog()
+	{
+		DialogView("Create Project", $("#createProjectDialog").html(), function(success, data)
+		{
+			if(success && (data.name.trim) && !(data.name.match(/\.\./)))
+				this.settingsManager.addProject(data.name, data.desc);
+		}, this);
+	}
+
 });
 function IDE()
 {
@@ -2079,83 +2159,4 @@ $(function()
 	{
 		console.log("startup failed, fall back to launchupdate layer.");
 	});
-})
-
-
-/*
-View.prototype = _.extend(_.clone(DaggerObject.prototype),
-{
-	show: function View_show()
-	{
-		;
-	},
-	hide: function View_hide()
-	{
-		;
-	}
 });
-function View(parent)
-{
-	this.parent = parent;
-}
-
-HomeView.prototype = _.extend(_.clone(View.prototype),
-{
-	show: function HomeView_show()
-	{
-		//fetch and populate news
-		//populate recent list
-
-		//wire project search to this.onProjectSearchChange
-	},
-	hide: function HomeView_hide()
-	{
-		;
-	},
-	onProjectSearchChange: function HomeView_onProjectSearchChange(e)
-	{
-		;
-	}
-});
-function HomeView(parent)
-{
-	View(parent);
-}
-
-RootView.prototype =
-{
-	switch: function RootView_switch(view)
-	{
-		if(this._view)
-		{
-			this._view.hide();
-			this._view.ignore("switch", this.onSwitch, this);
-		}
-		this._view = view;
-		if(this._view)
-		{
-			this._view.show();
-			this._view.listen("switch", this.onSwitch, this);
-		}
-	},
-	onSwitch: function RootView_onSwitch(event)
-	{
-		this.switch(this._views[event.name]);
-	},
-};
-function RootView()
-{
-	this._homeView = new HomeView(this);
-	this._editorView = new EditorView(this);
-
-	this._views =
-	{
-		home: this._homeView,
-		editor: this._editorView,
-	}
-	this.switch(this._homeView)
-}
-
-
-rootView = new RootView();
-*/

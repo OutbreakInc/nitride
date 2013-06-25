@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<title>Logiblock IDE (0.2 alpha) GDB Terminal</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<meta name="description" content="Logiblock IDE GDB Terminal"/>
+	<meta name="author" content="Outbreak, Inc."/>
+	
+	<link rel="stylesheet" type="text/css" href="static/jquery-terminal-50bd0a0/jquery.terminal.css" media="screen"/>
+	<link rel="icon" type="image/png" href="images/outbreakFavicon.png"/>
+</head>
+<body style="margin: 0px; padding: 0px; background: #000;">
+	<div id="terminal" style="position: absolute; height: 100%; width: 100%; margin: 0px; padding: 0px;">
+	</div>
+
+	<script src="static/jquery-1.7.2/jquery-1.7.2.min.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/jquery-terminal-50bd0a0/jquery.terminal-0.6.3.min.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/jquery-terminal-50bd0a0/jquery.mousewheel-min.js" type="application/javascript" charset="utf-8"></script>
+	<script type="application/javascript">
+		function DebugTerminal()
+		{
+			this.signOn = "                          ___   ___\n   gdb Debug Terminal    /  /  /  /\n      _________   ______/  /  /  /_____\n     /  ___   /  /  ___   /  /  ___   /\n    /  /__/  /  /  /__/  /  /  /__/  /\n   /_____   /  /________/  /________/\n  ______/  /\n /________/   Copyright (c) 1985\n";
+			this.prompt = "(gdb) ";
+		 	this.$el = $("#terminal");
+
+		 	this.busy = false;
+		 	var ths = this;
+		 	this.$el.terminal(function(command, term)
+			{
+				if(window.callback)
+				{
+					ths.busy = true;
+					term.set_prompt("");
+					window.callback(command, term, function()
+					{
+						ths.busy = false;
+						term.set_prompt(ths.prompt);
+					});
+				}
+			},
+			{
+				greetings: this.signOn,
+				name: "gdb-term",
+				//height: 200,
+				prompt: this.prompt,
+				keydown: function(e)
+				{
+					if(ths.busy)
+						return(false);
+				}
+			});
+
+			var $b = $("body");
+			$b.resize(function()
+			{
+				this.term.$el.resize($b.width(), $b.height());
+			});
+		}
+
+		this.term = new DebugTerminal();
+
+	</script>
+</body>
+</html>

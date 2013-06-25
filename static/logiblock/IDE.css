@@ -16,9 +16,24 @@ body
 	height: 100%;
 }
 
-.container
+.section
 {
-	width: auto;	/*overrides bootstrap, allowing smaller windows*/
+	width: auto;
+	margin-left: 20px;
+	margin-right: 20px;
+}
+
+.projectThumb
+{
+	width: 160px;
+	padding: 10px;
+}
+
+.projectThumb:hover
+{
+	border-color: #FF7518;
+	box-shadow: 0 1px 4px rgba(255, 117, 24, 0.25);
+	cursor: pointer;
 }
 
 .colorOrange
@@ -163,9 +178,6 @@ body
 
 .listView .selected
 {
-	/*background-image: url("../yui-2.9.0/treeview-loading.gif");
-	background-position: left center;
-	background-repeat: no-repeat;*/
 	font-weight: bold;
 }
 
@@ -208,6 +220,10 @@ div[class="tooltip-inner"]
 	max-width: 700px;
 	font-size: 14px;
 }
+div[class="popover-inner"]
+{
+	max-width: 700px;
+}
 
 #varTree
 {
@@ -229,6 +245,18 @@ div[class="tooltip-inner"]
 p.error-body
 {
 	word-wrap: break-word;
+}
+
+.spinning
+{
+	display: inline-block;
+	width: 22px;
+	height: 16px;
+	line-height: 16px;
+	vertical-align: text-top;
+	background-image: url("../yui-2.9.0/treeview-loading.gif");
+	background-position: left center;
+	background-repeat: no-repeat;
 }
 
 /*

@@ -13,8 +13,16 @@
 	<link rel="stylesheet" type="text/css" href="static/logiblock/IDE.css" media="screen"/>
 	<link rel="stylesheet" type="text/css" href="static/yui-2.9.0/treeview.css" media="screen"/>
 	
+	<!--<link rel="stylesheet" type="text/css" href="static/jquery-terminal-50bd0a0/jquery.terminal.css" media="screen"/>
+-->
+
 	<style type="text/css">
 		body{ padding-top: 60px; padding-bottom: 40px;}
+
+		.documentation,.dialog
+		{
+			display: none;
+		}
 	</style>
 	
 	<link rel="icon" type="image/png" href="images/outbreakFavicon.png"/>
@@ -31,12 +39,6 @@
 			<div class="nav-collapse">
 				
 				<ul id="tabs" class="nav">
-					<script type="text/x-handlebars" data-view="topNavigation">
-					<li class="divider-vertical"></li>
-					{{#projects}}
-					<li><a href="{{this.href}}">{{this.title}}</a></li>
-					{{/projects}}
-					</script>
 					<li class="tabstart divider-vertical"></li>
 				</ul>
 				
@@ -47,23 +49,12 @@
 							Options<b class="caret"></b>
 						</a>
 						<ul class="dropdown-menu">
-							<script type="text/x-handlebars" data-view="dropdownMenuItems">
-							{{#files}}
-							<li><a href="#file1">File 1</a></li>
-							<li class="selected"><a href="#file2">File 2</a></li>
-							{{/files}}
+							<!--<li><a href="#"><span class="icon-tasks"></span> Settings</a></li>-->
+							<li><a id="gdbConsole" href="#"><span class="icon-cog"></span> GDB console</a></li>
 							<li class="divider"></li>
-							<li><a href="#settings">Settings</a></li>
+							<li><a id="devConsole" href="#"><span class="icon-wrench"></span> Development console</a></li>
 							<li class="divider"></li>
-							<li><a href="#">Help</a></li>
-							</script>
-							<!--<li class="selected"><a href="#/main.cpp">main.cpp</a></li>
-							<li><a href="#/GalagoAPI.cpp">GalagoAPI.cpp</a></li>
-							<li><a href="#/GalagoAPI.h">GalagoAPI.h</a></li>
-							<li class="divider"></li>-->
-							<li><a href="#settings">Settings</a></li>
-							<li class="divider"></li>
-							<li><a href="#">Help</a></li>
+							<li><a href="http://logiblock.com/help" target="_blank"><span class="icon-question-sign"></span> Help</a></li>
 						</ul>
 					</li>
 				</ul>
@@ -72,49 +63,36 @@
 		</div>
 	</div>
 	
-	<!--
-	<div class="container" id="home" style="display:hidden">
-		<div class="row break sectionBreak">
-		<script type="text/x-handlebars" data-view="blog">
-			{{#each .}}
-			<div class="span4">
-				<h2>{{title}}</h2>
-				<small>{{date}} by {{>user author}}</small>
-				<p>
-				{{{body}}}
-				</p>
-			</div>
-			{{/each}}
-		</script>
-		</div>
-		<hr class="break"/>
-		<div class="row break">
-			<div class="span12">
-				<button class="btn btn-large btn-primary pull-left">New</button>
-				<form class="search pull-left btn-large">
-					<input id="projectSearch" type="text" class="search-query" placeholder="Search Projects...">
-				</form>
+	<div class="section" id="home" style="display:none">
+		<div class="break">
+			<!--<p><em>Please excuse the crudity of this home screen,
+			I didn't have time to build it to scale or to paint it.</em></p>-->
+			<div class="alert alert-block alert-error">
+				<h4>Notice</h4>
+				This is an experimental version of the Logiblock IDE. It is currently under intense
+				development.  If something is not working, check back later for an update or visit
+				<a href="http://logiblock.com/help" target="_blank">logiblock.com/help</a> for help.
 			</div>
 		</div>
-		<div class="row break">
-			<div class="span12">
-				<ul id="projectChooser" class="thumbnails break">
-				<script type="text/x-handlebars" data-view="homeThumbnail">
-					<li class="span3">
-						{{#each .}}
-						<a href="#" class="thumbnail bigthumb">
-							<img src="static/tex1.jpg"/>
-						</a>
-						<h3>{{name}}</h3>
-						<small>{{date}}</small>
-						{{/each}}
-					</li>
-				</script>
-				</ul>
+		<div id="recentProjects" class="break">
+			<hr/>
+			<div class="navbar">
+				<div class="navbar-inner">
+					<span class="brand" href="#">Projects</span>
+					<ul class="nav">
+						<li class="divider-vertical"></li>
+						<li><a id="createProject" href="#">New</a></li>
+						<li class="divider-vertical"></li>
+					</ul>
+					<!--<form id="projectSearch" class="navbar-search pull-left">
+						<input type="text" class="search-query disabled" placeholder="Search">
+					</form>-->
+				</div>
 			</div>
+
+			<ul class="list thumbnails break"></ul>
 		</div>
 	</div>
-	-->
 	
 	<div id="modalDialog" class="modal hide fade" tabindex="-1" role="dialog">
 		<div class="modal-header">
@@ -130,7 +108,7 @@
 	</div>
 
 
-	<div id="editor" class="editorView">
+	<div id="editor" class="editorView" style="display:none">
 		<div class="leftColumn">
 			<div id="aceView" class="documentView"></div>
 		</div>
@@ -143,7 +121,7 @@
 							<span class="addButton"></span>
 						</div>
 						<div class="sidebarSection">
-							<ul class="listView">
+							<ul class="list listView">
 							</ul>
 						</div>
 					</li>
@@ -172,7 +150,7 @@
 							Devices
 						</div>
 						<div class="sidebarSection">
-							<ul class="listView">
+							<ul class="list listView">
 							</ul>
 						</div>
 					</li>
@@ -181,7 +159,7 @@
 							Problems
 						</div>
 						<div class="sidebarSection">
-							<ul class="listView">
+							<ul class="list listView">
 							</ul>
 						</div>
 					</li>
@@ -190,7 +168,7 @@
 							Callstack
 						</div>
 						<div class="sidebarSection">
-							<ul class="listView">
+							<ul class="list listView">
 							</ul>
 						</div>
 					</li>
@@ -207,16 +185,16 @@
 			</div>
 			<ul class="noscroll">
 				<li class="controlButtons">
-					<button id="verifyRestart" class="btn"><span class="icon-ok"></span></button>
-					<button id="runContinue" class="btn"><span class="icon-play"></span></button>
-					<button id="debugPause" class="btn"><span class="icon-pause"></span></button>
+					<button id="verifyRestart" class="btn disabled"><span class="icon-ok"></span></button>
+					<button id="runContinue" class="btn disabled"><span class="icon-play"></span></button>
+					<button id="debugPause" class="btn disabled"><span class="icon-pause"></span></button>
 					<button id="stop" class="btn disabled"><span class="icon-eject"></span></button>
 				</li>
 			</ul>
 		</div>
 	</div>
 
-	<div style="display: none;">
+	<div class="dialog">
 		<div id="addFileDialog">
 			<p>Please choose a new name for the file.</p>
 			<form>
@@ -232,10 +210,80 @@
 		</div>
 	</div>
 
-	<script type="text/x-handlebars" data-helper="user">
-		<a href="/users/{{id}}/{{username}}">{{username}}</a>
-	</script>
+	<div class="dialog">
+		<div id="createProjectDialog">
+			<p>Please choose a name for the project.</p>
+			<p><em>Because projects are also modules, project names may only contain alphanumeric characters, '-' and '_'.</em></p>
+			<form>
+				<label for="createProjectDialog_name">Name</label>
+				<input id="createProjectDialog_name" name="name" type="text" tabindex="0" placeholder="example"/>
+				<label for="createProjectDialog_desc">Description</label>
+				<input id="createProjectDialog_desc" name="desc" type="text" tabindex="0" placeholder="brief description"/>
+			</form>
+		</div>
+	</div>
+
+	<div class="documentation" data-for="verifyRestart">
+		<div class="title">
+			Build (<span class="icon-ok"></span>) or Restart (<span class="icon-repeat"></span>) Button
+		</div>
+		<div class="body">
+			<p><span class="icon-ok"></span> <strong>Verify:</strong> Use this button to build your project.
+			Problems building your project appear in the <em>Problems</em> section.</p>
+			<hr/>
+			<p><span class="icon-repeat"></span> <strong>Restart:</strong> While paused in a debug session,
+			press this button to start from the beginning.  The device will reset and pause on the first
+			instruction of the program.</p>
+		</div>
+	</div>
+	<div class="documentation" data-for="runContinue">
+		<div class="title">
+			Run or Continue (<span class="icon-play"></span>) Button
+		</div>
+		<div class="body">
+			<p><strong>When editing:</strong> this button will download (if necessary) a new program to the selected
+			device and run it from the beginning.</p>
+			<p><strong>While paused in a debug session:</strong> press this button to continue running the program.</p>
+			<hr/>
+			<p><em><span class="icon-pause"></span><strong>Pause at start:</strong> Hold <strong>shift</strong> while pressing this button to have the device pause
+			on the first instruction when starting from the beginning.</em></p>
+		</div>
+	</div>
+	<div class="documentation" data-for="debugPause">
+		<div class="title">
+			Pause (<span class="icon-pause"></span>) Button
+		</div>
+		<div class="body">
+			<p><strong>During a debug session:</strong> press this button to pause the program.  The device will pause
+			wherever it happens to be running, which might be your source code, a library function or
+			perhaps a ROM routine.</p>
+			<hr/>
+			<p><strong>When editing:</strong> press this button to attach to a device and pause it without downloading
+			new firmware or starting from the beginning. If a device was already paused, pressing this
+			button will show you where the program stopped.</p>
+		</div>
+	</div>
+	<div class="documentation" data-for="stop">
+		<div class="title">
+			Stop Debugging (<span class="icon-eject"></span>) Button
+		</div>
+		<div class="body">
+			<p><strong>During a debug session</strong>, pressing this button will stop debugging and return to editing
+			mode.</p>
+		</div>
+	</button>
 	
+	<script type="application/javascript">
+		
+		var gui = require("nw.gui");
+		
+		document.getElementById("devConsole").onclick = function(e)
+		{
+			gui.Window.get().showDevTools();
+			return(false);
+		};
+	</script>
+
 	<script src="static/jquery-1.7.2/jquery-1.7.2.min.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/underscore-1.3.3/underscore-1.3.3.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/handlebars-1.0.0-rc.3/handlebars-1.0.0-rc.3.min.js" type="application/javascript" charset="utf-8"></script>
@@ -248,22 +296,12 @@
 	<script src="static/yui-2.9.0/yahoo-dom-event.js" type="application/javascript" charset="utf-8"></script>
 	<script src="static/yui-2.9.0/treeview-min.js" type="application/javascript" charset="utf-8"></script>
 	
+	<!--<script src="static/jquery-terminal-50bd0a0/jquery.terminal-0.6.3.js" type="application/javascript" charset="utf-8"></script>
+	<script src="static/jquery-terminal-50bd0a0/jquery.mousewheel-min.js" type="application/javascript" charset="utf-8"></script>
+	-->
+
 	<script src="Dagger.js" type="application/javascript" charset="utf-8"></script>
 	<script src="IDE.js" type="application/javascript" charset="utf-8"></script>
 
-	<!--<script type="application/javascript">
-		
-		var gui = require("nw.gui");
-		
-		//debug
-		var mainWindow = gui.Window.get();
-		mainWindow.showDevTools();
-		
-		//main
-		var IDE = require("./IDE");
-
-		var homeView = IDE.init();
-
-	</script>-->
 </body>
 </html>

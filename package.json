@@ -8,7 +8,7 @@
 	"main": "IDE.html",
 	"window":
 	{
-		"toolbar": true
+		"toolbar": false
 	},
 	"dependencies":
 	{

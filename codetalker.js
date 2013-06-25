@@ -111,6 +111,13 @@ function parseGDB_MI(response)
 	return(o);
 }
 
+function unescapeGDB(str)
+{
+	if(str[0] == '"')
+		return(str.substr(1, str.length - 2).replace(/\\(["'])/g, "$1").replace(/\\\\/g, "\\"));
+	return(str);
+}
+
 function _parse_inner(tokens, o)
 {
 	while(tokens.length > 0)
@@ -139,7 +146,7 @@ function _parse_inner(tokens, o)
 			break;
 		default:
 			if((typeof t == "string") && (t[0] == '"'))
-				v = t.substr(1, t.length - 2).replace(/\\(["'])/g, "$1").replace(/\\\\/g, "\\");
+				v = unescapeGDB(t);
 			else v = t;
 			if(!isNaN(v))	v = Number(v);
 			break;
@@ -151,15 +158,21 @@ function _parse_inner(tokens, o)
 
 Command.prototype =
 {
-	command: undefined,
-	callback: undefined,
-	response: "",
-	error: false,
-	active: true,
-	expectsResponse: true
 };
 function Command(cmd, expectsResponse, callback)
 {
+	_extend(this,
+	{
+		command: undefined,
+		callback: undefined,
+		response: "",
+		messages: "",
+		comments: "",
+		error: false,
+		active: true,
+		expectsResponse: true
+	});
+
 	this.command = cmd || "";
 	this.active = true;
 	this.expectsResponse = expectsResponse;
@@ -235,6 +248,26 @@ CodeTalker.prototype =
 		});
 
 		compiler.compile(paths, callback);
+	},
+
+	gdbCommand: function CodeTalker_gdbCommand(command, callback)
+	{
+		if(command == "pause")
+			command = "-exec-interrupt";
+		
+		this.submit(command, function(taskContext)
+		{
+			if(taskContext.response == "done")
+				callback(undefined, taskContext.messages, taskContext.comments);
+			else if(taskContext.response == "error")
+				callback(taskContext.args.msg || "Error");
+			else if(taskContext.response == "running")
+				callback(undefined, "Target is running. Use command 'pause' to stop.", taskContext.comments);
+			else if(taskContext.response == "stopped")
+				callback(undefined, "Target stopped.", taskContext.comments);
+			else
+				callback(new Error("Could not execute the provided command"));
+		}.bind(this));
 	},
 
 	connect: function CodeTalker_connect(port, callback)
@@ -774,10 +807,14 @@ CodeTalker.prototype =
 					else if(sym == "~")
 					{
 						console.log("GDB: ", command);
+						if(this._tasks.length > 0)
+							this._tasks[0].messages += unescapeGDB(command.substr(1)).replace(/\\n/g, "\n");
 					}
 					else if(sym == "&")
 					{
 						console.log("GDB: ", command);
+						if(this._tasks.length > 0)
+							this._tasks[0].comments += unescapeGDB(command.substr(1)).replace(/\\n/g, "\n");
 					}
 					else switch(command)
 					{

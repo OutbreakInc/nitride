@@ -11,6 +11,26 @@ module.exports =
 		case "win32":	return(path.join(process.env["APPDATA"], "Logiblock", "modules"));
 		}
 	},
+	settingsDir: function settingsDir()
+	{
+		switch(process.platform)
+		{
+		case "darwin":	return(path.join(process.env["HOME"], "Library/Application Support/Logiblock"));
+		default:
+		case "linux":	return(path.join(process.env["HOME"], ".logiblock"));
+		case "win32":	return(path.join(process.env["APPDATA"], "Logiblock"));
+		}
+	},
+	projectsDir: function projectsDir()
+	{
+		switch(process.platform)
+		{
+		case "darwin":	return(path.join(process.env["HOME"], "Documents/Logiblock/projects"));
+		default:
+		case "linux":	return(path.join(process.env["HOME"], "logiblock/projects"));
+		case "win32":	return(path.join(process.env["HOMEDIR"], "Logiblock", "projects"));
+		}
+	},
 	modulesDir: function modulesDir()
 	{
 		switch(process.platform)
