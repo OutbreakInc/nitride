@@ -13,8 +13,11 @@ var AceRange = ace.require("ace/range").Range;
 //node requirements
 var fs = require("fs");
 var Path = require("path");
-var CodeTalker = require("./codetalker");
-var Config = require("./Config");
+
+__dirname = Path.dirname(unescape(window.location.pathname));
+
+var CodeTalker = require(Path.join(__dirname, "codetalker"));
+var Config = require(Path.join(__dirname, "Config"));
 
 
 //why require("mkdirp") when you can implement it so elegantly?
