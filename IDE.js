@@ -37,6 +37,18 @@ function mkdirp(path, callback)
 	});
 };
 
+//returns an associative object of URL key-value pairs
+function urlArguments(urlQuery)
+{
+	var parts = (urlQuery || window.location.search).substr(1).split("&"), o = {};
+
+	for(var i in parts)
+	{
+		var p = parts[i].split("=");
+		o[decodeURIComponent(p[0])] = (p.length > 1)? decodeURIComponent(p[1]) : undefined;
+	}
+	return(o);
+}
 
 
 File.prototype = _.extend(new Dagger.Object(),
