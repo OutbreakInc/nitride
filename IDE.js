@@ -20,6 +20,11 @@ var CodeTalker = require(Path.join(__dirname, "codetalker"));
 var Config = require(Path.join(__dirname, "Config"));
 
 
+//identify
+var package = require(Path.join(__dirname, "package.json"));
+gui.Window.get().title = "Logiblock IDE " + package.version;
+
+
 //why require("mkdirp") when you can implement it so elegantly?
 function mkdirp(path, callback)
 {
