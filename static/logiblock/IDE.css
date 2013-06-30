@@ -230,15 +230,12 @@ div[class="popover-inner"]
 	overflow: hidden;
 }
 
-.addButton
+.sidebarHeaderButton
 {
 	position: absolute;
-	right: 20px;	/* @@problem - no explanation for why it's not clickable when all the way to the right */
-	width: 20px;
+	right: 10px;	/* @@problem - no explanation for why it's not clickable when all the way to the right */
 	height: 20px;
-	/*border: 1px solid #888;
-	border-radius: 4px 4px 4px 4px;*/
-	background: url(../img/glyphicons-halflings.png) -405px -94px no-repeat;
+	border-left: 1px solid #888;
 	cursor: pointer;
 }
 
@@ -257,6 +254,16 @@ p.error-body
 	background-image: url("../yui-2.9.0/treeview-loading.gif");
 	background-position: left center;
 	background-repeat: no-repeat;
+}
+
+.fileBrowser
+{
+	height: 200px;
+	overflow: scroll;
+	border: 1px solid #ccc;
+	border-radius: 5px;
+	padding: 0px 3px;
+	box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.1);
 }
 
 /*

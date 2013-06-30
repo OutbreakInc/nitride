@@ -19,7 +19,7 @@
 	<style type="text/css">
 		body{ padding-top: 60px; padding-bottom: 40px;}
 
-		.documentation,.dialog
+		.documentation,#dialog
 		{
 			display: none;
 		}
@@ -49,7 +49,7 @@
 							Options<b class="caret"></b>
 						</a>
 						<ul class="dropdown-menu">
-							<!--<li><a href="#"><span class="icon-tasks"></span> Settings</a></li>-->
+							<li><a id="settingsButton" href="#"><span class="icon-tasks"></span> Settings</a></li>
 							<li><a id="gdbConsole" href="#"><span class="icon-cog"></span> GDB console</a></li>
 							<li class="divider"></li>
 							<li><a id="devConsole" href="#"><span class="icon-wrench"></span> Development console</a></li>
@@ -63,6 +63,19 @@
 		</div>
 	</div>
 	
+	<div id="modalDialog" class="modal hide fade" tabindex="-1" role="dialog">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			<h3>Title</h3>
+		</div>
+		<div class="modal-body">
+		</div>
+		<div class="modal-footer">
+			<a href="#" class="btn cancelButton">Cancel</a>
+			<a href="#" class="btn btn-primary okButton">OK</a>
+		</div>
+	</div>
+
 	<div class="section" id="home" style="display:none">
 		<div class="break">
 			<!--<p><em>Please excuse the crudity of this home screen,
@@ -94,20 +107,6 @@
 		</div>
 	</div>
 	
-	<div id="modalDialog" class="modal hide fade" tabindex="-1" role="dialog">
-		<div class="modal-header">
-			<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-			<h3>Title</h3>
-		</div>
-		<div class="modal-body">
-		</div>
-		<div class="modal-footer">
-			<a href="#" class="btn cancelButton">Cancel</a>
-			<a href="#" class="btn btn-primary okButton">OK</a>
-		</div>
-	</div>
-
-
 	<div id="editor" class="editorView" style="display:none">
 		<div class="leftColumn">
 			<div id="aceView" class="documentView"></div>
@@ -118,7 +117,7 @@
 					<li id="files" class="visibleEdit visibleDebug">
 						<div class="sidebarHeader">
 							Files
-							<span class="addButton"></span>
+							<span class="sidebarHeaderButton"><span class="icon-cog"></span> Add/Remove</span>
 						</div>
 						<div class="sidebarSection">
 							<ul class="list listView">
@@ -128,7 +127,7 @@
 					<!--<li class="visibleEdit visibleDebug">
 						<div class="sidebarHeader">
 							Breakpoints
-							<div class="addButton"></div>
+							<div class="sidebarHeaderButton icon-cog"></div>
 						</div>
 						<div class="sidebarSection">
 							<ul id="breakpoints" class="listView">
@@ -138,7 +137,7 @@
 					<!--<li class="visibleEdit">
 						<div class="sidebarHeader">
 							Modules
-							<div class="addButton"></div>
+							<div class="sidebarHeaderButton icon-cog"></div>
 						</div>
 						<div class="sidebarSection">
 							<ul id="modules" class="listView">
@@ -194,33 +193,152 @@
 		</div>
 	</div>
 
-	<div class="dialog">
-		<div id="addFileDialog">
-			<p>Please choose a new name for the file.</p>
-			<form>
-				<label for="addFileDialog_name">Name</label>
-				<input id="addFileDialog_name" name="name" type="text" tabindex="0" placeholder="example.cpp"/>
-				<label for="addFileDialog_base">Relative to</label>
-				<select id="addFileDialog_base" name="base" tabindex="1">
-					<option value="project">your project's directory</option>
-					<option value="platform">the Logiblock SDK directory</option>
-					<option value="sdk">the GNU SDK directory</option>
-				</select>
-			</form>
-		</div>
-	</div>
 
-	<div class="dialog">
-		<div id="createProjectDialog">
-			<p>Please choose a name for the project.</p>
-			<p><em>Because projects are also modules, project names may only contain alphanumeric characters, '-' and '_'.</em></p>
-			<form>
-				<label for="createProjectDialog_name">Name</label>
-				<input id="createProjectDialog_name" name="name" type="text" tabindex="0" placeholder="example"/>
-				<label for="createProjectDialog_desc">Description</label>
-				<input id="createProjectDialog_desc" name="desc" type="text" tabindex="0" placeholder="brief description"/>
-			</form>
+	<div id="dialog">
+		<div id="projectFilesDialog">
+			
+			<div class="tabbable tabs-left">
+				<ul class="nav nav-tabs">
+					<li class="active"><a href="#projectFilesDialog_tab_new" data-toggle="tab"><span class="icon-plus"></span> Create New</a></li>
+					<li><a href="#projectFilesDialog_tab_existing" data-toggle="tab"><span class="icon-folder-open"></span> Add Existing</a></li>
+					<li><a href="#projectFilesDialog_tab_remove" data-toggle="tab"><span class="icon-remove"></span> Remove</a></li>
+				</ul>
+				<div class="tab-content">
+					
+					<div class="tab-pane active newFile" id="projectFilesDialog_tab_new">
+						<form class="form-horizontal">
+							<div class="control-group">
+								<label class="control-label" for="projectFilesDialog_tab_new_filename" style="width: 60px;">Name</label>
+								<div class="controls" style="margin-left: 80px;">
+									<input type="text" id="projectFilesDialog_tab_new_filename" name="filename" placeholder="example.cpp"/>
+									<span class="help-block">Source files typically end in <strong>.cpp</strong>, headers in <strong>.h</strong></span>
+								</div>
+							</div>
+						</form>
+						<div class="alert alert-error" style="display:none">
+							<p>That's not a valid filename. Paths cannot be absolute or contain parent references (<strong>../</strong>). Additionally, source files must end in on of:</p><p><strong>.c .cpp .cc .cxx .h .hpp .hh .hxx .S</strong> or <strong>.s</strong></p>
+						</div>
+					</div>
+
+					<div class="tab-pane existingFile" id="projectFilesDialog_tab_existing">
+						<form>
+							<div class="fileBrowser yui-skin-sam">
+								<div class="fileTree"></div>
+							</div>
+						</form>
+					</div>
+
+					<div class="tab-pane removeFile" id="projectFilesDialog_tab_remove">
+						<form>
+							<div class="currentFiles fileBrowser">
+								<ul class="list listView"></ul>
+							</div>
+						</form>
+					</div>
+
+				</div>
+			</div>
+
 		</div>
+
+
+		<div id="createProjectDialog">
+			<form class="form-horizontal">
+				<div class="control-group">
+					<label class="control-label" for="createProjectDialog_name" style="width: 100px;">Name</label>
+					<div class="controls" style="margin-left: 120px;">
+						<div class="input-prepend">
+							<span class="add-on">local/</span>
+							<input type="text" id="createProjectDialog_name" name="name" placeholder="example-project"/>
+						</div>
+					</div>
+				</div>
+				<div class="control-group">
+					<label class="control-label" for="createProjectDialog_desc" style="width: 100px;">Description</label>
+					<div class="controls" style="margin-left: 120px;">
+						<input type="text" id="createProjectDialog_desc" class="input-block-level" name="desc" placeholder="brief description"/>
+						<hr/>
+						<span class="help-block"><em>Because projects are also modules, project names may only contain alphanumeric characters, '-' and '_'.</em></span>
+					</div>
+				</div>
+			</form>
+			<div class="alert alert-error" style="display:none">
+				<p>Sorry, that's not a valid project name.</p>
+			</div>
+		</div>
+
+
+		<div id="settingsDialog">
+			<div class="tabbable tabs-left">
+				<ul class="nav nav-tabs">
+					<li class="active"><a href="#settingsDialog_tab_general" data-toggle="tab">
+						<span class="icon-tasks"></span> General
+					</a></li>
+					<li><a href="#settingsDialog_tab_updates" data-toggle="tab">
+						<span class="icon-download-alt"></span> Updates
+					</a></li>
+				</ul>
+				<div class="tab-content">
+					
+					<div class="tab-pane active" id="settingsDialog_tab_general">
+						<form class="form-horizontal">
+							<div class="control-group">
+								<label class="control-label" for="settingsDialog_feature1">Enable warnings</label>
+								<div class="controls">
+									<div id="settingsDialog_feature1" class="btn-group" data-toggle="buttons-radio">
+										<button type="button" class="btn">Off</button>
+										<button type="button" class="btn active">On</button>
+									</div>
+								</div>
+							</div>
+							<!--<div class="control-group">
+								<label class="control-label" for="settingsDialog_feature2">Mode</label>
+								<div class="controls">
+									<select id="settingsDialog_feature2" name="base" tabindex="1">
+										<option value="project">your project's directory</option>
+										<option value="platform">the Logiblock SDK directory</option>
+										<option value="sdk">the GNU SDK directory</option>
+									</select>
+								</div>
+							</div>
+							<hr/>
+							<div class="control-group">
+								<div class="controls">
+									<label class="checkbox"/><input type="checkbox"> Option</input></label>
+									<button type="submit" class="btn">Sign in</button>
+								</div>
+							</div>-->
+						</form>
+					</div>
+
+					<div class="tab-pane" id="settingsDialog_tab_updates">
+						<form class="form-horizontal">
+
+							<div class="control-group">
+								<label class="control-label" for="settingsDialog_enableAutoUpdates">Automatic Updates</label>
+								<div class="controls">
+									<div id="settingsDialog_enableAutoUpdates" class="btn-group" data-toggle="buttons-radio">
+										<button type="button" class="btn" data-value="false">Off</button>
+										<button type="button" class="btn active" data-value="true">On</button>
+									</div>
+								</div>
+							</div>
+
+							<hr/>
+
+							<div class="control-group">
+								<label class="control-label" for="settingsDialog_update_logiblock_nitride">logiblock/nitride</label>
+								<div class="controls"><div id="settingsDialog_update_logiblock_nitride" class="progress"><div class="bar" style="width: 30%;"></div></div></div>
+								<label class="control-label" for="settingsDialog_update_logiblock_platform">logiblock/platform</label>
+								<div class="controls"><div id="settingsDialog_update_logiblock_platform" class="progress"><div class="bar" style="width: 70%;"></div></div></div>
+							</div>
+						</form>
+					</div>
+
+				</div>
+			</div>
+		</div>
+
 	</div>
 
 	<div class="documentation" data-for="verifyRestart">

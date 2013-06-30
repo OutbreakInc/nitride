@@ -1,6 +1,6 @@
 process.on("uncaughtException", function(exception)
 {
-	console.log("Clouds are annoying, y'all: ", exception.stack);
+	console.warn("Clouds are annoying, y'all: ", exception.stack);
 });
 
 //webkit requirements
@@ -16,13 +16,41 @@ var Path = require("path");
 
 __dirname = Path.dirname(unescape(window.location.pathname));
 
-var CodeTalker = require(Path.join(__dirname, "codetalker"));
-var Config = require(Path.join(__dirname, "Config"));
+//relocate:
+//  note: this function doesn't work the same way as the Node standard, as it prefers local modules
+//    to built-in modules of the same name.  This shouldn't be a problem in practise.
+require = (function()
+{
+	var R = window.require;
+	var retry = function _require_retry(name)
+	{
+		var d = __dirname;
+		while((d != Path.sep))
+		{
+			try{ return(R(Path.join(d, "node_modules", name))); }
+			catch(e){ d = Path.dirname(d); }	//and try again
+		}
+		return(R(name));	//last chance: built-in
+	};
+	return(function _require(name)
+	{
+		if(name.substr(0, 1) == ".")
+			try{ return(R(Path.join(__dirname, name))); }
+			catch(e){ return(retry(name)); }
+		else
+			return(retry(name));
+	});
+})();
 
+var CodeTalker = require("./codetalker");
+var Config = require("./Config");
+var Q = require("q");
 
 //identify
-var package = require(Path.join(__dirname, "package.json"));
-gui.Window.get().title = "Logiblock IDE " + package.version;
+var package = require("./package.json");
+
+
+if(gui.Window.get())	gui.Window.get().title = "Logiblock IDE " + package.version;
 
 
 //why require("mkdirp") when you can implement it so elegantly?
@@ -42,6 +70,17 @@ function mkdirp(path, callback)
 	});
 };
 
+//extremely basic asynchronous loop for an array
+function loop(set, body, after)
+{
+	var i = -1, r;
+	(function()
+	{
+		if(++i == set.length)	after(set, r);
+		else					r = body(arguments.callee, set[i], i);
+	})();
+}
+
 //returns an associative object of URL key-value pairs
 function urlArguments(urlQuery)
 {
@@ -54,6 +93,67 @@ function urlArguments(urlQuery)
 	}
 	return(o);
 }
+
+//ls(), lsPromise(): generate an associative object tree from a directory (with lsPromise, as a promise)
+//  options may contain:
+//    filter: RegExp which must pass to include a file (default = /^[^.]/, hides hidden files)
+//    showHidden: bool to show files and dirs that start with "." (default = false, hides these files)
+//    hideEmpty: bool to prune empty directories (default = false, incde empty directories)
+//    absolute: bool to return absolute paths rather than relative to the location specified by 'path'
+function ls(path, options, callback)
+{
+	if(arguments.length == 2)
+	{
+		callback = options;
+		options = {};
+	}
+	if(!options.filter)	options.filter = /^[^.]/;
+	var recurse = function(absPath, relPath, options, callback)
+	{
+		var o = {}, cCount = 0;
+		fs.readdir(absPath, function(err, files)
+		{
+			if(err)
+			{
+				if(err.code == "ENOTDIR")	return(callback(relPath.match(options.filter)? (options.absolute? absPath : relPath) : undefined));
+				else						return(callback(err));
+			}
+
+			loop(files, function(next, file, i)
+			{
+				if((file.substr(0, 1) == ".") && !options.showHidden)	//early pruning of hidden dirs
+					return(next());
+
+				var sub = Path.join(absPath, file);
+				var relSub = Path.join(relPath, file);
+				recurse(sub, relSub, options, function(children)
+				{
+					if(children != undefined)
+					{
+						o[file] = children;
+						cCount++;
+					}
+					next();
+				});
+
+			}, function()
+			{
+				callback((!cCount && options.hideEmpty)? undefined : o);
+			});
+		});
+	};
+	recurse(path, "", options, callback);
+}
+function lsPromise(path, options)
+{
+	var p = Q.defer();
+	ls(path, options, function(o)
+	{
+		p.resolve(o);
+	});
+	return(p.promise);
+}
+
 
 
 File.prototype = _.extend(new Dagger.Object(),
@@ -74,7 +174,7 @@ File.prototype = _.extend(new Dagger.Object(),
 	{
 		if(!error)
 		{
-			console.log("read file yo!")
+			console.log("read file: ", this.path)
 			this.contents = contents;
 
 			this.trigger(new Dagger.Event(this, "load", {error: false}));
@@ -138,7 +238,7 @@ File.prototype = _.extend(new Dagger.Object(),
 		fs.writeFile(this.path, this.contents, {encoding: "utf8"}, function(error)
 		{
 			if(error)
-				console.log("error, write to backup path?!", error);
+				console.warn("error, write to backup path?!", error);
 		});
 	}
 });
@@ -193,6 +293,8 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 	open: function EditorView_open(path)
 	{
+		console.log("EditorView opening: ", path);
+
 		this.close();
 
 		this.file = new File(path);
@@ -227,6 +329,7 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 		//clear the editor
 		this.editor.getSession().setValue("", {renderCall: true});
+		this.editor.setReadOnly(this.readOnly || (this.file == null));
 	},
 	
 	setReadOnly: function EditorView_setReadOnly(readOnly)
@@ -452,7 +555,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		this.filesView.listen("addFile", function(e)
 		{
-			this.addFile(e.name, e.base);
+			this.showProjectFilesDialog();
 		}, this);
 
 		this.filesView.listen("selected", function(e)
@@ -547,9 +650,6 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	{
 		var f;
 
-		if(!path)	//not a real file, ignore it
-			return;
-		
 		if(path != this.currentPath)
 		{
 			if(this.currentPath)
@@ -561,35 +661,41 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 			this.editor.close();
 
-			f = this.filesByPath[this.currentPath = path];
-			if(f == undefined)	//the file isn't open yet
-			{
-				f = this.insertFile(this.currentPath);
+			this.currentPath = path;
 
-				this.filesByLRU.unshift(f.path);
-			}
-			else
+			if(path)
 			{
-				//update the access time and bump it to the head
-				f.lastAccessed = Date.now();
-				var off = this.filesByLRU.indexOf(f.path);
-				if(off != -1)
-					this.filesByLRU.splice(off, 1);
-				this.filesByLRU.unshift(f.path);
-			}
-			this.editor.open(f.path);
-			
-			this.editor.listen("opened", function()
-			{
-				this.editor.ignore("opened", arguments.callee);
+				f = this.filesByPath[path];
+				if(f == undefined)	//the file isn't open yet
+				{
+					f = this.insertFile(this.currentPath);
+
+					this.filesByLRU.unshift(f.path);
+				}
+				else
+				{
+					//update the access time and bump it to the head
+					f.lastAccessed = Date.now();
+					var off = this.filesByLRU.indexOf(f.path);
+					if(off != -1)
+						this.filesByLRU.splice(off, 1);
+					this.filesByLRU.unshift(f.path);
+				}
+				this.editor.open(f.path);
 				
-				this.editor.setScrollOffset(f.lastOffset);
+				this.editor.listen("opened", function()
+				{
+					this.editor.ignore("opened", arguments.callee);
+					
+					this.editor.setScrollOffset(f.lastOffset);
 
-				this.restoreAnnotations();
+					this.restoreAnnotations();
 
-				if(line != undefined)
-					this.editor.jumpToLine(line);
-			}, this);
+					if(line != undefined)
+						this.editor.jumpToLine(line);
+				}, this);
+			}
+			//else just close gracefully, as we can't open anything new
 		}
 		else
 		{
@@ -801,13 +907,147 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 		var files = [];
 		for(var i = 0; i < this.project.files.length; i++)
 		{
-			var path = this.resolvePath(this.project.files[i]);
-			files.push({path: path, name: Path.basename(path)});
+			var f = this.project.files[i], path = this.resolvePath(f);
+			files.push(
+			{
+				path: path,
+				base: f.base || "project",
+				relPath: Path.join(f.dir || "", f.name),
+				name: Path.basename(path)
+			});
 		}
 
 		this.filesView.setData(files);
 
 		return(files);
+	},
+
+	showProjectFilesDialog: function FileManager_showProjectFilesDialog()
+	{
+		var $dialog = $("#projectFilesDialog");
+
+		var tree = new YAHOO.widget.TreeView($(".fileTree", $dialog)[0]);
+
+		//show busy indication
+		tree.removeChildren(tree.getRoot());
+		new YAHOO.widget.HTMLNode(
+		{
+			id: undefined,
+			html: '<span class="spinning"></span> <em>(Loading...)</em>'
+		}, tree.getRoot());
+		tree.render();
+
+		var sourceFiles = /\.(c|cpp|cc|cxx|h|hpp|hh|hxx|s|S)$/;
+		
+		Q.all(
+		[
+			lsPromise(this.projectPath, {filter: sourceFiles, hideEmpty: true}),
+			lsPromise(this.pathsTable.platform, {filter: sourceFiles, hideEmpty: true}),
+			lsPromise(this.pathsTable.sdk, {filter: sourceFiles, hideEmpty: true})
+		]).then(function(dirs)
+		{
+			var genTree = function FileManager_showProjectFilesDialog_genTree(parent, base, n)
+			{
+				for(var k in n)
+				{
+					var isDir = (typeof n[k] != "string");
+					var node = new YAHOO.widget.HTMLNode(
+					{
+						id: base + n[k],
+						html: (isDir? '<span class="icon-folder-open"></span> ' : '<span class="icon-file"></span> ') + k
+					}, parent);
+
+					if(isDir)
+						arguments.callee(node, base, n[k]);
+				}
+			};
+			var genBase = function FileManager_showProjectFilesDialog_genBase(base, title, n)
+			{
+				genTree(new YAHOO.widget.HTMLNode(
+				{
+					id: base,
+					html: '<span class="icon-book"></span> ' + title
+				}, tree.getRoot()),
+				base + "|", n);
+			};
+
+			setTimeout(function(){	//@@ delayed slightly for demo purposes
+
+			tree.removeChildren(tree.getRoot());
+			genBase("project", '<em>This Project</em>', dirs[0]);
+			genBase("platform", '<em>Logiblock Platform</em>', dirs[1]);
+			genBase("sdk", '<em>GNU SDK</em>', dirs[2]);
+
+			tree.subscribe("clickEvent", function(e)
+			{
+				treeFocus = e.node.data.id || "";
+			});
+			tree.subscribe("dblClickEvent", function(e)
+			{
+				treeFocus = e.node.data.id || "";
+				$(".tab-pane.active form", $dialog).trigger("submit");
+			});
+			tree.subscribe("focusChanged", function(e)
+			{
+				if(e.newNode)
+					treeFocus = e.newNode.data.id || "";
+			});
+			tree.render();
+
+			}, 500);	//@@demo
+
+		}.bind(this));
+
+		var listView = new RemoveFileView($(".currentFiles", $dialog));
+
+		listView.listen("selected", function(e)
+		{
+			listView.setSelected(e.index);	//select it
+			removeFileFocus = e.index;
+		});
+		listView.setData(this.updateFilesView());	//sneaky trick
+
+		var treeFocus = "";
+		var removeFileFocus = "";
+		$("input", $dialog).val("");
+
+		//displayed synchronously, though the tree view is displayed asynchronously after dirs have been scanned
+		DialogView("Add/Remove Project Files", $dialog, function(success)
+		{
+			if(!success)	return;	//ignore
+
+			var $tab = $(".tab-pane.active", $dialog);
+			if($tab.hasClass("newFile"))	//new or existing?
+			{
+				var newFileName = String($('input[name="filename"]', $tab).val()).trim();
+				if(newFileName.match(/^\/|\.\.\//) || !newFileName.match(sourceFiles))
+				{
+					$(".alert", $tab).show();
+					return(false);	//prevent submission
+				}
+				else
+					$(".alert", $tab).hide();
+
+				this.addFile(newFileName, "project", true);	//new files may only be project-relative
+			}
+			else if($tab.hasClass("existingFile"))
+			{
+				var s = treeFocus.indexOf("|"), base = treeFocus.substr(0, s), file = treeFocus.substr(s + 1);
+				
+				if(!base)
+					return(false);
+
+				this.addFile(file, base, true);
+			}
+			else	//remove
+			{
+				if(!removeFileFocus)
+					return(false);
+				this.removeFile(removeFileFocus);
+			}
+
+			listView.destroy();
+		}, this);
 	}
 });
 function FileManager(pathsTable, editor, filesView)
@@ -977,6 +1217,8 @@ ListView.prototype = _.extend(new Dagger.Object(),
 			}
 		}
 
+		this.setSelected(this.sel);
+
 		this.$list.children().click(this._onItemSelected.bind(this));
 	},
 	clear: function ListView_clear()
@@ -986,9 +1228,15 @@ ListView.prototype = _.extend(new Dagger.Object(),
 	},
 	setSelected: function ListView_setSelected(index)
 	{
+		this.sel = index;
 		this.$list.children().removeClass("selected").filter('[data-index="' + index + '"]').addClass("selected");
 	},
-
+	destroy: function ListView_destroy()
+	{
+		this.clear();
+		this.$modifyButton.unbind("click");
+		this.$el = this.$list = this.$modifyButton = undefined;
+	},
 	_onItemSelected: function ListView__onItemSelected(event)
 	{
 		$r = $(event.currentTarget);
@@ -1005,17 +1253,18 @@ function ListView(selector, optionalRenderer)
 	{
 		$el: null,
 		$list: null,
-		$addButton: null,
+		$modifyButton: null,
+		sel: undefined
 	});
 
 	this.$el = $(selector);
 	this.$list = $("ul.list", this.$el);
-	this.$addButton = $(".addButton", this.$el);	//doesn't always have one
+	this.$modifyButton = $(".sidebarHeaderButton", this.$el);	//doesn't always have one
 
 	if(optionalRenderer)
 		this._render = optionalRenderer;
 
-	this.$addButton.click(function(){return(this._onAdd());}.bind(this));
+	this.$modifyButton.click(function(){return(this._onModify());}.bind(this));
 }
 
 
@@ -1033,7 +1282,7 @@ StackView.prototype = _.extend(new ListView(),
 		else
 			$line.attr("title", item.func + " - " + item.file + ":" + item.line);
 
-		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor"});
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor", delay: 500});
 
 		return($line);
 	}
@@ -1054,7 +1303,7 @@ DeviceView.prototype = _.extend(new ListView(),
 		$line.attr("data-index", item.gdbPort);
 		$line.attr("title", item.vendorName + " " + item.productName + " (serial no. \"" + item.serialNumber + "\")");
 
-		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor"});
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor", delay: 500});
 
 		return($line);
 	},
@@ -1081,22 +1330,18 @@ FilesView.prototype = _.extend(new ListView(),
 	_render: function FilesView__render(item, index, data)
 	{
 		var $line = $("<li/>");
-		$line.html(item.name);
+		$line.html(item.relPath);	//as opposed to item.name
 		$line.addClass((index & 1)? "odd" : "even");
 		$line.attr("data-index", item.path);
 		$line.attr("title", item.path);
 
-		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor"});
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor", delay: 500});
 		
 		return($line);
 	},
-	_onAdd: function FilesView__onAdd(event)
+	_onModify: function FilesView__onModify(event)
 	{
-		DialogView("Add File to Project", $("#addFileDialog").html(), function(success, data)
-		{
-			if(success && (data.name.trim) && !(data.name.match(/\.\./)))
-				this.trigger(new Dagger.Event(this, "addFile", {name: data.name, base: data.base}));
-		}, this);
+		this.trigger(new Dagger.Event(this, "addFile"));	//let another component handle the dialog
 	},
 	setData: function FilesView_setData(data)
 	{
@@ -1114,6 +1359,37 @@ function FilesView(selector, renderFn)
 {
 	ListView.apply(this, arguments);
 }
+
+
+RemoveFileView.prototype = _.extend(new ListView(),
+{
+	_render: function RemoveFileView__render(item, index, data)
+	{
+		var $line = $("<li/>");
+		$line.html('<em>&lt;' + item.base + '&gt;</em> ' + item.relPath);
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", item.path);
+
+		return($line);
+	},
+	setData: function RemoveFileView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $line = $("<li><em>(no project files)</em></li>");
+			$line.addClass("even");
+			this.$list.append($line);
+		}
+	},
+});
+function RemoveFileView(selector, renderFn)
+{
+	ListView.apply(this, arguments);
+}
+
+
 
 
 ProblemsView.prototype = _.extend(new ListView(),
@@ -1185,28 +1461,33 @@ function ProblemsView(selector)
 
 
 
-
-function DialogView(title, html, callback, context)
+//you may pass a jQ selector or a $(domElement) for 'dialogSelector'
+function DialogView(title, dialogSelector, callback, context)
 {
-	var $el = $("#modalDialog");
+	var $el = $("#modalDialog"), $contents = $(dialogSelector);
 
 	//fill it up
 	$("h3", $el).html(title);
-	$(".modal-body", $el).html(html);
+	$(".modal-body", $el).append($contents);
 
 	var options = {};
 	var complete = function DialogView_complete(success)
 	{
-		$ok.unbind("click", submit);
-		$cancel.unbind("click", fail);
-		$f.unbind("submit", submit);
-
 		var $options = $("input", $el).add("select", $el);
 		for(var i = 0; i < $options.length; i++)
 			options[$($options[i]).attr("name")] = $($options[i]).val();
 
-		$el.modal("hide");
-		callback.call(context, success, options);
+		if(callback.call(context, success, options) !== false)
+		{
+			$ok.unbind("click", submit);
+			$cancel.unbind("click", fail);
+			$f.unbind("submit", submit);
+			$el.modal("hide").on("hidden", function()
+			{
+				$el.unbind("hidden");
+				$("#dialog").append($contents);
+			});
+		}
 	};
 	var submit = function DialogView_sumbit(e)
 	{
@@ -1656,11 +1937,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				
 				this.breakpointTable.push({path: event.path, line: event.line, num: breakpointNum});
 				
-				//delayed by 500ms for demonstration purposes
-				setTimeout(function()
-				{
+				setTimeout(function() {	//@@delayed by 500ms for demonstration purposes
+				
 					this.fileManager.addBreakpoint(event.path, event.line, "breakpoint");
-				}.bind(this), 500);
+				
+				}.bind(this), 500);	//@@demo
 
 			}.bind(this));
 		}.bind(this));
@@ -1698,8 +1979,14 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		{
 			this.showCreateProjectDialog();
 
+			e.preventDefault(); return(false);
+		}.bind(this));
+
+		$("#settingsButton").click(function(e)
+		{
+			this.showSettings();
+
 			e.preventDefault();
-			return(false);
 		}.bind(this));
 
 		$("#gdbConsole").click(function(e)
@@ -1715,6 +2002,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		$("#homeButton").click(function(e)
 		{
 			this.goHome();
+			e.preventDefault();
 		}.bind(this));
 
 
@@ -1993,7 +2281,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.log("Error: ", error);
+						console.warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2015,7 +2303,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.log("Error: ", error);
+						console.warn("Error: ", error);
 						return;
 					}
 					
@@ -2035,7 +2323,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 									if(error)
 									{
 										this.setRunState("stopped");
-										console.log("Failed to continue! Error: ", error);
+										console.warn("Failed to continue! Error: ", error);
 									}
 									//else codetalker signals the correct run-time state transition
 								}.bind(this));
@@ -2044,7 +2332,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						else
 						{
 							this.setRunState("editing");
-							console.log("Failed to flash! Error: ", error);
+							console.warn("Failed to flash! Error: ", error);
 						}
 					}.bind(this));
 
@@ -2063,7 +2351,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.log("Error: ", error);
+						console.warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2077,7 +2365,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)	//if connecting to the hardware failed or timed out
 					{
 						this.setAllButtonsEnabled(true);
-						console.log("Error: ", error);
+						console.warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2102,7 +2390,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			if(callstack[frame].path)
 				this.fileManager.navigate(callstack[frame].path, callstack[frame].line);
 			else
-				console.log("can't resolve that frame");
+				console.warn("can't resolve that frame");
 
 		}.bind(this));
 	},
@@ -2138,10 +2426,40 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 	showCreateProjectDialog: function IDE_showCreateProjectDialog()
 	{
-		DialogView("Create Project", $("#createProjectDialog").html(), function(success, data)
+		var $el = $("#createProjectDialog");
+		$("input", $el).val("");
+		
+		DialogView("Create Project", $el, function(success, data)
 		{
-			if(success && (data.name.trim) && !(data.name.match(/\.\./)))
-				this.settingsManager.addProject(data.name, data.desc);
+			if(!success) return;	//ignore
+
+			var name = String(data.name).trim();
+			if(!name || name.match(/[^A-Za-z0-9_-]/))
+			{
+				$(".alert", $el).show();
+				return(false);
+			}
+			$(".alert", $el).hide();
+
+			this.settingsManager.addProject(name, String(data.desc).trim());
+		}, this);
+	},
+
+	showSettings: function IDE_showSettings()
+	{
+		var $el = $("#settingsDialog");
+		$("input", $el).val();
+		DialogView("Settings", $el, function(success, data)
+		{
+			console.log(success, data);
+		}, this);
+	},
+	
+	showUpdateSettings: function IDE_showSettings()
+	{
+		DialogView("Settings", $("#settingsDialog"), function(success, data)
+		{
+			console.log(success, data);
 		}, this);
 	}
 
@@ -2177,6 +2495,6 @@ $(function()
 		window.ide.init(codeTalker);
 	}).fail(function()
 	{
-		console.log("startup failed, fall back to launchupdate layer.");
+		console.warn("startup failed, fall back to launchupdate layer.");
 	});
 });
