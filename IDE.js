@@ -50,7 +50,12 @@ var Q = require("q");
 var package = require("./package.json");
 
 
-if(gui.Window.get())	gui.Window.get().title = "Logiblock IDE " + package.version;
+function setWindowTitle(projectName)
+{
+	var t = (projectName? (projectName + " - ") : "") + "Logiblock IDE " + package.version;
+	if(gui.Window.get())
+		gui.Window.get().title = t;
+}
 
 
 //why require("mkdirp") when you can implement it so elegantly?
@@ -293,8 +298,6 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 	open: function EditorView_open(path)
 	{
-		console.log("EditorView opening: ", path);
-
 		this.close();
 
 		this.file = new File(path);
@@ -309,6 +312,11 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 
 			this.editor.setReadOnly(this.readOnly || (this.file == null));
 			this.trigger(new Dagger.Event(this, "opened"));
+
+			this.file.listen("save", function(e)
+			{
+				this.trigger(e);
+			}, this);
 		}
 		else
 		{
@@ -548,6 +556,10 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 		this.editor = editor;
 
 		this.editor.listen("toggleBreakpoint", this.onBreakpointRequested, this);
+		this.editor.listen("save", function(e)
+		{
+			this.trigger(new Dagger.Event(this, "projectUpdate", {path: this.projectPath}));
+		}, this);
 	},
 	setFilesView: function FileManager_setFilesView(filesView)
 	{
@@ -591,6 +603,8 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 			if(files.length > 0)
 				this.navigate(files[0].path);
+
+			setWindowTitle(this.project.name);
 
 		}.bind(this));
 	},
@@ -643,6 +657,8 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 		this.projectPath = undefined;
 		this.pathsTable.project = this.pathsTable.output = this.projectPath;
 		this.filesView.setData();
+
+		setWindowTitle();
 	},
 
 	//argument 'line' is optional
@@ -926,16 +942,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	{
 		var $dialog = $("#projectFilesDialog");
 
-		var tree = new YAHOO.widget.TreeView($(".fileTree", $dialog)[0]);
-
-		//show busy indication
-		tree.removeChildren(tree.getRoot());
-		new YAHOO.widget.HTMLNode(
-		{
-			id: undefined,
-			html: '<span class="spinning"></span> <em>(Loading...)</em>'
-		}, tree.getRoot());
-		tree.render();
+		var tree = new FileTreeView($(".fileTree", $dialog));
 
 		var sourceFiles = /\.(c|cpp|cc|cxx|h|hpp|hh|hxx|s|S)$/;
 		
@@ -946,55 +953,20 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			lsPromise(this.pathsTable.sdk, {filter: sourceFiles, hideEmpty: true})
 		]).then(function(dirs)
 		{
-			var genTree = function FileManager_showProjectFilesDialog_genTree(parent, base, n)
-			{
-				for(var k in n)
-				{
-					var isDir = (typeof n[k] != "string");
-					var node = new YAHOO.widget.HTMLNode(
-					{
-						id: base + n[k],
-						html: (isDir? '<span class="icon-folder-open"></span> ' : '<span class="icon-file"></span> ') + k
-					}, parent);
+			//setTimeout(function(){	//@@ delayed slightly for demo purposes
 
-					if(isDir)
-						arguments.callee(node, base, n[k]);
-				}
-			};
-			var genBase = function FileManager_showProjectFilesDialog_genBase(base, title, n)
-			{
-				genTree(new YAHOO.widget.HTMLNode(
-				{
-					id: base,
-					html: '<span class="icon-book"></span> ' + title
-				}, tree.getRoot()),
-				base + "|", n);
-			};
+			tree.clear();
+			
+			tree.addBase('<em>This Project</em>', "project|", dirs[0]);
+			tree.addBase('<em>Logiblock Platform</em>', "platform|", dirs[1]);
+			tree.addBase('<em>GNU SDK</em>', "sdk|", dirs[2]);
 
-			setTimeout(function(){	//@@ delayed slightly for demo purposes
-
-			tree.removeChildren(tree.getRoot());
-			genBase("project", '<em>This Project</em>', dirs[0]);
-			genBase("platform", '<em>Logiblock Platform</em>', dirs[1]);
-			genBase("sdk", '<em>GNU SDK</em>', dirs[2]);
-
-			tree.subscribe("clickEvent", function(e)
+			tree.listen("doubleClick", function(e)
 			{
-				treeFocus = e.node.data.id || "";
-			});
-			tree.subscribe("dblClickEvent", function(e)
-			{
-				treeFocus = e.node.data.id || "";
 				$(".tab-pane.active form", $dialog).trigger("submit");
-			});
-			tree.subscribe("focusChanged", function(e)
-			{
-				if(e.newNode)
-					treeFocus = e.newNode.data.id || "";
-			});
-			tree.render();
+			}, this);
 
-			}, 500);	//@@demo
+			//}, 500);	//@@demo
 
 		}.bind(this));
 
@@ -1007,7 +979,6 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 		});
 		listView.setData(this.updateFilesView());	//sneaky trick
 
-		var treeFocus = "";
 		var removeFileFocus = "";
 		$("input", $dialog).val("");
 
@@ -1032,7 +1003,10 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			}
 			else if($tab.hasClass("existingFile"))
 			{
-				var s = treeFocus.indexOf("|"), base = treeFocus.substr(0, s), file = treeFocus.substr(s + 1);
+				var selection = tree.getSelection(),
+					s = selection.indexOf("|"),
+					base = selection.substr(0, s),
+					file = selection.substr(s + 1);
 				
 				if(!base)
 					return(false);
@@ -1070,7 +1044,100 @@ function FileManager(pathsTable, editor, filesView)
 	this.setFilesView(filesView);
 }
 
-//
+
+
+FileTreeView.prototype = _.extend(new Dagger.Object(),
+{
+	clear: function FileTreeView_clear()
+	{
+		this.tree.removeChildren(this.tree.getRoot());
+	},
+	getSelection: function FileTreeView_getSelection()
+	{
+		return(this.focus);
+	},
+	addSubtree: function FileTreeView_addSubtree(subtree, idPrefix, parent)
+	{
+		if(!idPrefix)	idPrefix = "";
+		if(!parent)		parent = this.tree.getRoot();
+
+		(function(subtree, idPrefix, parent)
+		{
+			var keys = Object.keys(subtree);
+			for(var i = 0; i < keys.length; i++)
+			{
+				var name = keys[i], isDir = (typeof subtree[name] != "string");
+				var node = new YAHOO.widget.HTMLNode(
+				{
+					id: idPrefix + name,
+					html: (isDir? '<span class="icon-folder-open"></span> ' : '<span class="icon-file"></span> ') + name
+				}, parent);
+
+				if(isDir)
+					arguments.callee(subtree[name], idPrefix, node);
+			}
+		})(subtree, idPrefix, parent);
+
+		this.tree.render();
+	},
+	addBase: function FileTreeView_addBase(title, id, subtree)
+	{
+		var node = new YAHOO.widget.HTMLNode(
+		{
+			id: id,
+			html: '<span class="icon-book"></span> ' + title
+		}, this.tree.getRoot());
+
+		if(subtree)
+			this.addSubtree(subtree, id? id : "", node);
+		else
+			this.tree.render();
+
+		return(node);
+	}
+});
+function FileTreeView(selector)
+{
+	_.extend(this,
+	{
+		tree: null,
+		$el: null,
+		focus: ""
+	});
+
+	this.$el = $(selector);
+	this.tree = new YAHOO.widget.TreeView(this.$el[0]);
+
+	//show busy indication
+	this.tree.removeChildren(this.tree.getRoot());
+	new YAHOO.widget.HTMLNode(
+	{
+		id: undefined,
+		html: '<span class="spinning"></span> <em>(Loading...)</em>'
+	}, this.tree.getRoot());
+
+	var ths = this;
+	this.tree.subscribe("clickEvent", function(e)
+	{
+		ths.focus = e.node.data.id || "";
+		ths.trigger(new Dagger.Event(ths, "click", {focus: ths.focus}));
+	});
+	this.tree.subscribe("dblClickEvent", function(e)
+	{
+		ths.focus = e.node.data.id || "";
+		ths.trigger(new Dagger.Event(ths, "doubleClick", {focus: ths.focus}));
+	});
+	this.tree.subscribe("focusChanged", function(e)
+	{
+		if(e.newNode)
+		{
+			ths.focus = e.newNode.data.id || "";
+			ths.trigger(new Dagger.Event(ths, "select", {focus: ths.focus}));
+		}
+	});
+
+	this.tree.render();
+}
 
 
 
@@ -1131,7 +1198,7 @@ VarView.prototype =
 
 			new YAHOO.widget.HTMLNode(
 			{
-				id: id,		//@@possible problem
+				id: id,
 				html: this.formatValue(variable.children) + (derefType? (" <em>(" + derefType + ")</em>") : "")
 			}, node);
 		}
@@ -1389,6 +1456,35 @@ function RemoveFileView(selector, renderFn)
 	ListView.apply(this, arguments);
 }
 
+RemoveProjectView.prototype = _.extend(new ListView(),
+{
+	_render: function RemoveProjectView__render(item, index, data)
+	{
+		var $line = $("<li/>");
+		$line.html(item.name || "(untitled)");	//the untitled case should never happen, but just in case
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", item.lastPath);
+
+		return($line);
+	},
+	setData: function RemoveProjectView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $line = $("<li><em>(no recent projects)</em></li>");
+			$line.addClass("even");
+			this.$list.append($line);
+		}
+	},
+});
+function RemoveProjectView(selector, renderFn)
+{
+	ListView.apply(this, arguments);
+}
+
+
 
 
 
@@ -1507,10 +1603,13 @@ function DialogView(title, dialogSelector, callback, context)
 
 	$f = $("form", $el).submit(submit);
 	
-	$el.modal().bind("shown", function()
+	$el.bind("shown", function()
 	{
+		$el.unbind("shown");
 		$($("input", $el)[0]).focus();
 	});	//show it
+
+	$el.modal("show");
 }
 
 
@@ -1709,6 +1808,8 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 
 			fs.writeFile(Path.join(this.path, "settings.json"), JSON.stringify(this.settings), {encoding: "utf8"}, function(error)
 			{
+				console.log("saving settings " + (error? "failed." : "succeeded."));
+
 				//this.trigger(new Dagger.Event(this, "save", {error: !!error}));
 			}.bind(this));
 
@@ -1744,14 +1845,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 					if(err)
 						return(console.warn("Error: could not create project: ", err));
 
-					//create and add the project to the IDE settings
-					(this.settings.recentProjects || (this.settings.recentProjects = [])).push(
-					{
-						name: name,
-						lastPath: projectBase,
-						modifiedTime: Date.now()
-					});
-					this.trigger(new Dagger.Event(this, "change"));
+					this.addExistingProject(projectBase, name);
 
 				}.bind(this));
 
@@ -1759,33 +1853,129 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 
 		}.bind(this));
 	},
-	touchProject: function SettingsManager_touchProject(name)
+	addExistingProject: function SettingsManager_addExistingProject(path)
+	{
+		fs.readFile(Path.join(path, "module.json"), function(err, contents)
+		{
+			if(err)
+				return(console.warn("Could not add project because its module.json file could not be opened."));
+			
+			var moduleJSON;
+			try{ moduleJSON = JSON.parse(contents); }
+			catch(e)
+			{
+				return(console.warn("Could not add project because its module.json file could not be parsed."));
+			}
+
+			//create and add the project to the IDE settings
+			(this.settings.recentProjects || (this.settings.recentProjects = [])).push(
+			{
+				name: moduleJSON.name,
+				lastPath: path,
+				modifiedTime: Date.now()
+			});
+			this.trigger(new Dagger.Event(this, "change"));
+
+		}.bind(this));
+	},
+	touchProject: function SettingsManager_touchProject(path)
 	{
 		if(this.settings.recentProjects)
 			for(var i = 0; i < this.settings.recentProjects.length; i++)
-				if(this.settings.recentProjects[i].name == name)
+				if(this.settings.recentProjects[i].lastPath == path)
 				{
 					this.settings.recentProjects[i].modifiedTime = Date.now();
 					this.trigger(new Dagger.Event(this, "change"));
 					break;
 				}
 	},
-	removeProject: function SettingsManager_removeProject(name)
+	removeProject: function SettingsManager_removeProject(path)
 	{
 		if(this.settings.recentProjects)
 			for(var i = 0; i < this.settings.recentProjects.length; i++)
-				if(this.settings.recentProjects[i].name == name)
+				if(this.settings.recentProjects[i].lastPath == path)
 				{
-					this.settings.recentProjects.slice(i, 1);
+					this.settings.recentProjects.splice(i, 1);
 					this.trigger(new Dagger.Event(this, "change"));
 					break;
 				}
 	},
+
+	showCreateProjectDialog: function IDE_showCreateProjectDialog()
+	{
+		var $dialog = $("#createProjectDialog");
+		$("input", $dialog).val("");
+		
+		var tree = new FileTreeView($(".fileTree", $dialog));
+
+		var base = Config.projectsDir();
+		ls(base, {filter: /^$/}, function(subtree)
+		{
+			tree.clear();
+			tree.addBase('<em>Local Projects</em>', base + Path.sep, subtree);
+		});
+		
+		tree.listen("doubleClick", function()
+		{
+			$(".tab-pane.active form", $dialog).trigger("submit");
+		});
+
+		
+		var removeFileFocus = "";
+		var listView = new RemoveProjectView($(".currentFiles", $dialog));
+
+		listView.listen("selected", function(e)
+		{
+			listView.setSelected(e.index);	//select it
+			removeFileFocus = e.index;
+		});
+		listView.setData(this.settings.recentProjects || {});
+
+
+		DialogView("Add / Remove Project", $dialog, function(success, data)
+		{
+			if(!success) return;	//ignore
+
+			var $tab = $(".tab-pane.active", $dialog);
+			if($tab.hasClass("newProject"))
+			{
+				var name = String(data.name).trim();
+				if(!name || name.match(/[^A-Za-z0-9_-]/))
+				{
+					$(".alert", $dialog).show();
+					return(false);
+				}
+				$(".alert", $dialog).hide();
+				this.addProject(name, String(data.desc).trim());
+			}
+			else if($tab.hasClass("existingProject"))
+			{
+				console.log("would add: ", tree.getSelection());
+
+				if(!tree.getSelection())
+					return(false);
+
+				this.addExistingProject(tree.getSelection());
+			}
+			else
+			{
+				if(!removeFileFocus)
+					return(false);
+
+				this.removeProject(removeFileFocus);
+			}
+		}, this);
+	},
+
 });
 function SettingsManager(pathsTable)
 {
-	this.pathsTable = pathsTable;
-	this.path = Config.settingsDir();
+	_.extend(this,
+	{
+		pathsTable: pathsTable,
+		path: Config.settingsDir(),
+		settings: {}
+	});
 
 	this.listen("change", function()	//pub/sub to the max
 	{
@@ -1895,6 +2085,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		this.settingsManager.load();
 
+		this.fileManager.listen("projectUpdate", function(e)
+		{
+			this.settingsManager.touchProject(e.path);	//update last-modified time
+		}, this);
+
 		this.tabs.listen("selected", function(e)
 		{
 			this.fileManager.navigate(e.path);
@@ -1937,11 +2132,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				
 				this.breakpointTable.push({path: event.path, line: event.line, num: breakpointNum});
 				
-				setTimeout(function() {	//@@delayed by 500ms for demonstration purposes
+				//setTimeout(function() {	//@@delayed by 500ms for demonstration purposes
 				
 					this.fileManager.addBreakpoint(event.path, event.line, "breakpoint");
 				
-				}.bind(this), 500);	//@@demo
+				//}.bind(this), 500);	//@@demo
 
 			}.bind(this));
 		}.bind(this));
@@ -1977,7 +2172,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		$("#createProject").click(function(e)
 		{
-			this.showCreateProjectDialog();
+			this.settingsManager.showCreateProjectDialog();
 
 			e.preventDefault(); return(false);
 		}.bind(this));
@@ -2424,27 +2619,6 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		$("#editor").show();
 	},
 
-	showCreateProjectDialog: function IDE_showCreateProjectDialog()
-	{
-		var $el = $("#createProjectDialog");
-		$("input", $el).val("");
-		
-		DialogView("Create Project", $el, function(success, data)
-		{
-			if(!success) return;	//ignore
-
-			var name = String(data.name).trim();
-			if(!name || name.match(/[^A-Za-z0-9_-]/))
-			{
-				$(".alert", $el).show();
-				return(false);
-			}
-			$(".alert", $el).hide();
-
-			this.settingsManager.addProject(name, String(data.desc).trim());
-		}, this);
-	},
-
 	showSettings: function IDE_showSettings()
 	{
 		var $el = $("#settingsDialog");
@@ -2493,6 +2667,7 @@ $(function()
 	new CodeTalker.CodeTalker().promise.then(function(codeTalker)
 	{
 		window.ide.init(codeTalker);
+		setWindowTitle();
 	}).fail(function()
 	{
 		console.warn("startup failed, fall back to launchupdate layer.");

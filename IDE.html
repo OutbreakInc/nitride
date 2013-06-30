@@ -94,7 +94,7 @@
 					<span class="brand" href="#">Projects</span>
 					<ul class="nav">
 						<li class="divider-vertical"></li>
-						<li><a id="createProject" href="#">New</a></li>
+						<li><a id="createProject" href="#">Add / Remove</a></li>
 						<li class="divider-vertical"></li>
 					</ul>
 					<!--<form id="projectSearch" class="navbar-search pull-left">
@@ -243,29 +243,60 @@
 
 
 		<div id="createProjectDialog">
-			<form class="form-horizontal">
-				<div class="control-group">
-					<label class="control-label" for="createProjectDialog_name" style="width: 100px;">Name</label>
-					<div class="controls" style="margin-left: 120px;">
-						<div class="input-prepend">
-							<span class="add-on">local/</span>
-							<input type="text" id="createProjectDialog_name" name="name" placeholder="example-project"/>
+			<div class="tabbable tabs-left">
+				<ul class="nav nav-tabs">
+					<li class="active"><a href="#createProjectDialog_tab_new" data-toggle="tab"><span class="icon-plus"></span> Create New</a></li>
+					<li><a href="#createProjectDialog_tab_existing" data-toggle="tab"><span class="icon-folder-open"></span> Add Existing</a></li>
+					<li><a href="#createProjectDialog_tab_remove" data-toggle="tab"><span class="icon-remove"></span> Remove</a></li>
+				</ul>
+				<div class="tab-content">
+					
+					<div class="tab-pane active newProject" id="createProjectDialog_tab_new">
+						<form class="form-horizontal">
+							<div class="control-group">
+								<label class="control-label" for="createProjectDialog_name" style="width: 100px;">Name</label>
+								<div class="controls" style="margin-left: 120px;">
+									<div class="input-prepend">
+										<span class="add-on">local/</span>
+										<input type="text" id="createProjectDialog_name" name="name" placeholder="example-project"/>
+									</div>
+								</div>
+							</div>
+							<div class="control-group">
+								<label class="control-label" for="createProjectDialog_desc" style="width: 100px;">Description</label>
+								<div class="controls" style="margin-left: 120px;">
+									<input type="text" id="createProjectDialog_desc" class="input-block-level" name="desc" placeholder="brief description"/>
+									<hr/>
+									<span class="help-block"><em>Because projects are also modules, project names may only contain alphanumeric characters, '-' and '_'.</em></span>
+								</div>
+							</div>
+						</form>
+						<div class="alert alert-error" style="display:none">
+							<p>Sorry, that's not a valid project name.</p>
 						</div>
 					</div>
-				</div>
-				<div class="control-group">
-					<label class="control-label" for="createProjectDialog_desc" style="width: 100px;">Description</label>
-					<div class="controls" style="margin-left: 120px;">
-						<input type="text" id="createProjectDialog_desc" class="input-block-level" name="desc" placeholder="brief description"/>
-						<hr/>
-						<span class="help-block"><em>Because projects are also modules, project names may only contain alphanumeric characters, '-' and '_'.</em></span>
+
+					<div class="tab-pane existingProject" id="createProjectDialog_tab_existing">
+						<form>
+							<div class="fileBrowser yui-skin-sam">
+								<div class="fileTree"></div>
+							</div>
+						</form>
 					</div>
+
+					<div class="tab-pane removeFile" id="createProjectDialog_tab_remove">
+						<form>
+							<div class="currentFiles fileBrowser">
+								<ul class="list listView"></ul>
+							</div>
+						</form>
+					</div>
+
 				</div>
-			</form>
-			<div class="alert alert-error" style="display:none">
-				<p>Sorry, that's not a valid project name.</p>
 			</div>
+
 		</div>
+
 
 
 		<div id="settingsDialog">
