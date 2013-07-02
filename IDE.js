@@ -120,7 +120,7 @@ function ls(path, options, callback)
 			if(err)
 			{
 				if(err.code == "ENOTDIR")	return(callback(relPath.match(options.filter)? (options.absolute? absPath : relPath) : undefined));
-				else						return(callback(err));
+				else						return(callback(undefined));
 			}
 
 			loop(files, function(next, file, i)
@@ -1062,7 +1062,7 @@ FileTreeView.prototype = _.extend(new Dagger.Object(),
 
 		(function(subtree, idPrefix, parent)
 		{
-			var keys = Object.keys(subtree);
+			var keys = (subtree && Object.keys(subtree)) || [];
 			for(var i = 0; i < keys.length; i++)
 			{
 				var name = keys[i], isDir = (typeof subtree[name] != "string");
