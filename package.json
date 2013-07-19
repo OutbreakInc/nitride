@@ -1,6 +1,6 @@
 {
 	"name": "LogiblockIDE",
-	"version": "0.9.4",
+	"version": "0.10.1",
 	"private": true,
 	"description": "Logiblock IDE",
 	"license": "Proprietary",
@@ -12,8 +12,8 @@
 	},
 	"dependencies":
 	{
-		"moduleverse": ">=0.1.8",
-		"q": "0.9.6"
+		"moduleverse": ">=0.1.10",
+		"noq": ">=0.0.3"
 	},
 	"devDependencies":
 	{

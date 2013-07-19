@@ -19,6 +19,8 @@ __dirname = Path.dirname(unescape(window.location.pathname));
 //relocate:
 //  note: this function doesn't work the same way as the Node standard, as it prefers local modules
 //    to built-in modules of the same name.  This shouldn't be a problem in practise.
+/*
+//not needed as of NW 0.6+
 require = (function()
 {
 	var R = window.require;
@@ -41,10 +43,11 @@ require = (function()
 			return(retry(name));
 	});
 })();
+*/
 
 var CodeTalker = require("./codetalker");
 var Config = require("./Config");
-var Q = require("q");
+var Q = require("noq");
 
 //identify
 var package = require("./package.json");
@@ -53,8 +56,7 @@ var package = require("./package.json");
 function setWindowTitle(projectName)
 {
 	var t = (projectName? (projectName + " - ") : "") + "Logiblock IDE " + package.version;
-	if(gui.Window.get())
-		gui.Window.get().title = t;
+	document.title = t;
 }
 
 
@@ -1833,7 +1835,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 				description: description || "",
 				version: "0.1",
 				compatibleWith: ["Galago4"],
-				dependencies: []
+				dependencies: {"logiblock/galago": ">0"}
 			}),
 			function(err)
 			{

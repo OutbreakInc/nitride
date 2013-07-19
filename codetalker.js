@@ -1,7 +1,7 @@
 var childProcess = require("child_process");
 var Path = require("path");
 var moduleverse = require("moduleverse");
-var Q = require("q");
+var Q = require("noq");
 var EventEmitter = require("events").EventEmitter;
 var Config = require("./Config");
 var Platform;		//will be resolved asynchronously later
@@ -239,7 +239,7 @@ CodeTalker.prototype =
 		if(Platform == undefined)
 			return(callback(new Error("CodeTalker hasn't finished initializing!")));
 		
-		var compiler = new Platform.Compiler();
+		var builder = new Platform.ProjectBuilder();
 
 		var paths = _extend({}, this._pathsTable,
 		{
@@ -247,7 +247,13 @@ CodeTalker.prototype =
 			output: projectRoot		//@@for now, should move elsewhere
 		});
 
-		compiler.compile(paths, callback);
+		builder.build(paths).then(function(result)
+		{
+			callback(null, result.output, result);	//compatibility interface
+		}).fail(function(e)
+		{
+			callback(e);
+		});
 	},
 
 	gdbCommand: function CodeTalker_gdbCommand(command, callback)
