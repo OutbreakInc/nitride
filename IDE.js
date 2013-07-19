@@ -3,17 +3,7 @@ process.on("uncaughtException", function(exception)
 	console.warn("Clouds are annoying, y'all: ", exception.stack);
 });
 
-//webkit requirements
-var aceRange = ace.require("ace/range").Range;
-var aceCppMode = ace.require("ace/mode/c_cpp").Mode;
-var AceEditSession = ace.require("ace/edit_session").EditSession;
-var AceDocument = ace.require("ace/document").Document;
-var AceRange = ace.require("ace/range").Range;
-
-//node requirements
-var fs = require("fs");
 var Path = require("path");
-
 __dirname = Path.dirname(unescape(window.location.pathname));
 
 //relocate:
@@ -45,12 +35,20 @@ require = (function()
 })();
 */
 
+
+var aceRange = ace.require("ace/range").Range;
+var aceCppMode = ace.require("ace/mode/c_cpp").Mode;
+var AceEditSession = ace.require("ace/edit_session").EditSession;
+var AceDocument = ace.require("ace/document").Document;
+var AceRange = ace.require("ace/range").Range;
+
+var fs = require("fs");
+
 var CodeTalker = require("./codetalker");
 var Config = require("./Config");
 var Q = require("noq");
 
-//identify
-var package = require("./package.json");
+var package = require("./package.json");	//know thyself
 
 
 function setWindowTitle(projectName)
@@ -123,7 +121,7 @@ function ls(path, options, callback)
 			if(err)
 			{
 				if(err.code == "ENOTDIR")	return(callback(relPath.match(options.filter)? (options.absolute? absPath : relPath) : undefined));
-				else						return(callback(err));
+				else						return(callback(undefined));
 			}
 
 			loop(files, function(next, file, i)
@@ -1065,7 +1063,7 @@ FileTreeView.prototype = _.extend(new Dagger.Object(),
 
 		(function(subtree, idPrefix, parent)
 		{
-			var keys = Object.keys(subtree);
+			var keys = (subtree && Object.keys(subtree)) || [];
 			for(var i = 0; i < keys.length; i++)
 			{
 				var name = keys[i], isDir = (typeof subtree[name] != "string");
@@ -2045,6 +2043,95 @@ function RecentProjectsView(selector)
 }
 
 
+Autoupdater.prototype = _.extend(new Dagger.Object(),
+{
+	setEnabled: function Autoupdater_setEnabled(enabled)
+	{
+		if(enabled && !this.timer)
+			this.timer = setTimeout(this.checkForUpdates.bind(this), 10000);
+		else if(!enabled && this.timer)
+			clearTimeout(this.timer);
+	},
+
+	checkForUpdates: function Autoupdater_checkForUpdates()
+	{
+		var html = '<div class="control-group" style="margin-bottom: 0;"><label class="control-label"></label><div class="controls"><div class="progress progress-striped"><div class="bar" style="width: 100%;"></div></div></div></div>';
+		
+		this.updates.push(this.update($(html).appendTo(this.$el), "logiblock", "nitride"));
+		this.updates.push(this.update($(html).appendTo(this.$el), "logiblock", "platform"));
+		this.updates.push(this.update($(html).appendTo(this.$el), "logiblock", Config.sdkName()));
+	},
+	update: function Autoupdater_update(domElement, owner, moduleName, version)
+	{
+		var $line = $(domElement);
+
+		var status =
+		{
+			progress: undefined,
+			version: "",
+			file: ""
+		};
+		var render = function()
+		{
+			if(status.progress !== undefined)
+			{
+				$("div.progress-striped", $line).removeClass("progress-striped");
+				$("div.bar", $line).css("width", (status.progress * 100).toFixed(0) + "%");
+			}
+			$(".lastFile", $line).html(status.file);
+			$(".control-label", $line).html(owner + "/" + moduleName + ' <small>' + status.version + '</small>');
+		};
+		var uiUpdate = setInterval(render, 500);
+
+		//$(".control-label", $line).html(owner + "/" + moduleName);
+		render();
+
+		var updaterPromise = new Moduleverse.ModuleUpdater(Config.baseDir(), owner, moduleName, version)
+		.on("version", function(version)
+		{
+			status.version = version;
+		}).on("file", function(file)
+		{
+			status.file = file;
+		}).on("progress", function(loaded, total)
+		{
+			status.progress = ((loaded / total) || 0);
+		}).promise.then(function(dir)
+		{
+			clearInterval(uiUpdate);
+
+			console.log("autoupdate complete for: " + owner + "/" + moduleName);
+			$("div.bar", $line).addClass("bar-success");
+			status.progress = 1;
+			render();
+
+		}).fail(function(err)
+		{
+			console.warn("failed to locate or update module: " + owner + "/" + moduleName);
+			$(".lastFile", $line).html("<em>error!</em>");
+			$("div.bar", $line).addClass("bar-danger");
+			clearInterval(uiUpdate);
+		});
+
+		//this.updates.push(updaterPromise);
+
+		return(updaterPromise);
+	}
+});
+function Autoupdater(selector, enabled)
+{
+	_.extend(this,
+	{
+		$el: null,
+		timer: null,
+		updates: []
+	});
+
+	this.$el = $(selector);	//@@improve
+
+	this.setEnabled((enabled == undefined)? true : enabled);
+}
+
 
 
 IDE.prototype = _.extend(new Dagger.Object(),
@@ -2076,6 +2163,8 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		this.runContinueButton = new Button("#runContinue");
 		this.debugPauseButton = new Button("#debugPause");
 		this.stopButton = new Button("#stop");
+
+		this.autoUpdater = new Autoupdater(".autoupdateProgress");
 
 		this.deviceView.setData();
 
