@@ -1,6 +1,6 @@
 {
 	"name":"nitride",
-	"version":"0.10.1",
+	"version":"0.10.2",
 	"tags":["logicode","logiblock","development","tool","ide"],
 	"description":"Logiblock IDE (integrated development environment)."
 }

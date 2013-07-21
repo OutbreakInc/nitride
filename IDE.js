@@ -9,11 +9,10 @@ __dirname = Path.dirname(unescape(window.location.pathname));
 //relocate:
 //  note: this function doesn't work the same way as the Node standard, as it prefers local modules
 //    to built-in modules of the same name.  This shouldn't be a problem in practise.
-/*
-//not needed as of NW 0.6+
+
 require = (function()
 {
-	var R = window.require;
+	var R = require;
 	var retry = function _require_retry(name)
 	{
 		var d = __dirname;
@@ -33,7 +32,7 @@ require = (function()
 			return(retry(name));
 	});
 })();
-*/
+
 
 
 var aceRange = ace.require("ace/range").Range;
@@ -44,9 +43,12 @@ var AceRange = ace.require("ace/range").Range;
 
 var fs = require("fs");
 
+console.log('require("./codetalker");', __dirname);
 var CodeTalker = require("./codetalker");
+console.log('ok!');
 var Config = require("./Config");
 var Q = require("noq");
+var Moduleverse = require("moduleverse");
 
 var package = require("./package.json");	//know thyself
 
@@ -2578,7 +2580,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				
 				//ugly hack just to ensure we connect with a proper device //@@necessary???
 				if(this.devicePort == undefined)
-					this.devicePort = this.deviceView.data[0].gdbPort;
+					this.devicePort = (this.deviceView.data && this.deviceView.data[0].gdbPort);
 
 				if(this.devicePort == undefined)
 					break;
