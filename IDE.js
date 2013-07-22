@@ -1,12 +1,62 @@
+////////////////////////////////////////////////////////////////
+// IDE.js
+//   The heart of the Nitride IDE
+//
+
+////////////////////////////////////////////////////////////////
+// patches
+function console_log()
+{
+	if(console)
+		console.log.apply(console, arguments);
+}
+
+function console_warn()
+{
+	if(console)
+		console.warn.apply(console, arguments);
+}
+
+//catch exceptions, if possible.  If we're in-between pages or things are busted, rethrow to at least log the error.
+//  Node.js says the "uncaughtException" event is effectively unrecoverable.
 process.on("uncaughtException", function(exception)
 {
-	console.warn("Clouds are annoying, y'all: ", exception.stack);
+	if(console)
+		console.warn("Clouds are annoying, y'all: ", exception.stack);
+	else
+		throw exception;	//hard fault
 });
+
+//at the document level, eat any (back-)delete events to prevent the browser view from navigating back to the launcher.
+$(document).keydown(function(e)
+{
+	if(e.keyCode == 8)	//(back-)delete / backspace
+	{
+		if($(event.target).is(":input") && (!event.target.readOnly) && (!event.target.disabled))
+			switch(event.target.type)
+			{
+			case "text":
+			case "password":
+			case "textarea":
+				break;
+			default:
+				e.preventDefault();	//prevent browser history navigation
+			}
+		else
+			e.preventDefault();
+	}
+});
+
+////////////////////////////////////////////////////////////////
 
 var Path = require("path");
 __dirname = Path.dirname(unescape(window.location.pathname));
 
-//relocate:
+//custom require():
+//  why? node-webkit demonstrates non-node.js-compliant require() behaviour when navigating between
+//    different pages.  We expect require() to use the current directory of a js file
+//    (or in NW, an html page too) as the preferred search path but this does not always occur as
+//    expected.
 //  note: this function doesn't work the same way as the Node standard, as it prefers local modules
 //    to built-in modules of the same name.  This shouldn't be a problem in practise.
 
@@ -34,7 +84,6 @@ require = (function()
 })();
 
 
-
 var aceRange = ace.require("ace/range").Range;
 var aceCppMode = ace.require("ace/mode/c_cpp").Mode;
 var AceEditSession = ace.require("ace/edit_session").EditSession;
@@ -43,22 +92,14 @@ var AceRange = ace.require("ace/range").Range;
 
 var fs = require("fs");
 
-console.log('require("./codetalker");', __dirname);
 var CodeTalker = require("./codetalker");
-console.log('ok!');
 var Config = require("./Config");
 var Q = require("noq");
 var Moduleverse = require("moduleverse");
 
 var package = require("./package.json");	//know thyself
 
-
-function setWindowTitle(projectName)
-{
-	var t = (projectName? (projectName + " - ") : "") + "Logiblock IDE " + package.version;
-	document.title = t;
-}
-
+////////////////////////////////////////////////////////////////
 
 //why require("mkdirp") when you can implement it so elegantly?
 function mkdirp(path, callback)
@@ -86,19 +127,6 @@ function loop(set, body, after)
 		if(++i == set.length)	after(set, r);
 		else					r = body(arguments.callee, set[i], i);
 	})();
-}
-
-//returns an associative object of URL key-value pairs
-function urlArguments(urlQuery)
-{
-	var parts = (urlQuery || window.location.search).substr(1).split("&"), o = {};
-
-	for(var i in parts)
-	{
-		var p = parts[i].split("=");
-		o[decodeURIComponent(p[0])] = (p.length > 1)? decodeURIComponent(p[1]) : undefined;
-	}
-	return(o);
 }
 
 //ls(), lsPromise(): generate an associative object tree from a directory (with lsPromise, as a promise)
@@ -162,6 +190,26 @@ function lsPromise(path, options)
 }
 
 
+//returns an associative object of URL key-value pairs
+function urlArguments(urlQuery)
+{
+	var parts = (urlQuery || window.location.search).substr(1).split("&"), o = {};
+
+	for(var i in parts)
+	{
+		var p = parts[i].split("=");
+		o[decodeURIComponent(p[0])] = (p.length > 1)? decodeURIComponent(p[1]) : undefined;
+	}
+	return(o);
+}
+
+function setWindowTitle(projectName)
+{
+	var t = (projectName? (projectName + " - ") : "") + "Logiblock IDE " + package.version;
+	document.title = t;
+}
+
+
 
 File.prototype = _.extend(new Dagger.Object(),
 {
@@ -181,7 +229,7 @@ File.prototype = _.extend(new Dagger.Object(),
 	{
 		if(!error)
 		{
-			console.log("read file: ", this.path)
+			console_log("read file: ", this.path)
 			this.contents = contents;
 
 			this.trigger(new Dagger.Event(this, "load", {error: false}));
@@ -241,11 +289,11 @@ File.prototype = _.extend(new Dagger.Object(),
 
 		this._needsSave = false;
 
-		console.log("will save '" + this.path + "' now.");
+		console_log("will save '" + this.path + "' now.");
 		fs.writeFile(this.path, this.contents, {encoding: "utf8"}, function(error)
 		{
 			if(error)
-				console.warn("error, write to backup path?!", error);
+				console_warn("error, write to backup path?!", error);
 		});
 	}
 });
@@ -323,7 +371,7 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 		else
 		{
 			this.close();
-			console.warn("Error opening file!")
+			console_warn("Error opening file!")
 			this.editor.setReadOnly(this.readOnly || (this.file == null));
 		}
 	},
@@ -639,13 +687,13 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		this._needsSave = false;
 
-		console.log("Saving project...");
+		console_log("Saving project...");
 		fs.writeFile(	Path.join(this.projectPath, "module.json"),
 						JSON.stringify(this.project),
 						{encoding: "utf8"},
 						function(err)
 		{
-			console.log("Project saved.");
+			console_log("Project saved.");
 		});
 	},
 	closeProject: function FileManager_closeProject()
@@ -859,7 +907,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	addFile: function FileManager_addFile(subPath, relativeBase, navigateTo)
 	{
 		if(!subPath)
-			return(console.warn("probably not a valid path: ", subPath));
+			return(console_warn("probably not a valid path: ", subPath));
 
 		var fileEntry = {base: relativeBase, dir: Path.dirname(subPath), name: Path.basename(subPath)};
 		
@@ -867,7 +915,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		if(path == undefined)	//unresolvable
 		{
-			console.warn("Could not resolve path:", subPath, relativeBase);
+			console_warn("Could not resolve path:", subPath, relativeBase);
 			return;
 		}
 
@@ -1311,7 +1359,7 @@ ListView.prototype = _.extend(new Dagger.Object(),
 		$r = $(event.currentTarget);
 
 		var index = $r.attr("data-index");
-		console.log("index " + index + " selected.");
+		console_log("index " + index + " selected.");
 		this.trigger(new Dagger.Event(this, "selected", {index: index}));
 	}
 });
@@ -1793,7 +1841,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 				}
 				catch(err)
 				{
-					console.warn("Cannot parse settings json! Re-initializing.");
+					console_warn("Cannot parse settings json! Re-initializing.");
 					this.settings = {};
 				}
 
@@ -1806,11 +1854,11 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		mkdirp(this.path, function(err)
 		{
 			if(err)
-				return(console.warn("Can't save project settings, must fly-by-night."));
+				return(console_warn("Can't save project settings, must fly-by-night."));
 
 			fs.writeFile(Path.join(this.path, "settings.json"), JSON.stringify(this.settings), {encoding: "utf8"}, function(error)
 			{
-				console.log("saving settings " + (error? "failed." : "succeeded."));
+				console_log("saving settings " + (error? "failed." : "succeeded."));
 
 				//this.trigger(new Dagger.Event(this, "save", {error: !!error}));
 			}.bind(this));
@@ -1825,7 +1873,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		mkdirp(projectBase, function(err)
 		{
 			if(err)
-				return(console.warn("Error: could not create project: ", err));
+				return(console_warn("Error: could not create project: ", err));
 
 			//create the project
 			fs.writeFile(Path.join(projectBase, "module.json"), JSON.stringify(
@@ -1840,12 +1888,12 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 			function(err)
 			{
 				if(err)
-					return(console.warn("Error: could not create project: ", err));
+					return(console_warn("Error: could not create project: ", err));
 
 				fs.writeFile(Path.join(projectBase, "main.cpp"), "#include <GalagoAPI.h>\nusing namespace Galago;\n\nint main(void)\n{\n\twhile(true)\n\t\tsystem.sleep();\n}\n", function(err)
 				{
 					if(err)
-						return(console.warn("Error: could not create project: ", err));
+						return(console_warn("Error: could not create project: ", err));
 
 					this.addExistingProject(projectBase, name);
 
@@ -1860,13 +1908,13 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		fs.readFile(Path.join(path, "module.json"), function(err, contents)
 		{
 			if(err)
-				return(console.warn("Could not add project because its module.json file could not be opened."));
+				return(console_warn("Could not add project because its module.json file could not be opened."));
 			
 			var moduleJSON;
 			try{ moduleJSON = JSON.parse(contents); }
 			catch(e)
 			{
-				return(console.warn("Could not add project because its module.json file could not be parsed."));
+				return(console_warn("Could not add project because its module.json file could not be parsed."));
 			}
 
 			//create and add the project to the IDE settings
@@ -1952,7 +2000,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 			}
 			else if($tab.hasClass("existingProject"))
 			{
-				console.log("would add: ", tree.getSelection());
+				console_log("would add: ", tree.getSelection());
 
 				if(!tree.getSelection())
 					return(false);
@@ -2102,14 +2150,14 @@ Autoupdater.prototype = _.extend(new Dagger.Object(),
 		{
 			clearInterval(uiUpdate);
 
-			console.log("autoupdate complete for: " + owner + "/" + moduleName);
+			console_log("autoupdate complete for: " + owner + "/" + moduleName);
 			$("div.bar", $line).addClass("bar-success");
 			status.progress = 1;
 			render();
 
 		}).fail(function(err)
 		{
-			console.warn("failed to locate or update module: " + owner + "/" + moduleName);
+			console_warn("failed to locate or update module: " + owner + "/" + moduleName);
 			$(".lastFile", $line).html("<em>error!</em>");
 			$("div.bar", $line).addClass("bar-danger");
 			clearInterval(uiUpdate);
@@ -2250,7 +2298,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.codeTalker.removeBreakpoint(this.breakpointTable[breakpointIdx].num, function(error)
 			{
 				if(error)
-					return(console.warn("Unable to remove breakpoint."));	//um?
+					return(console_warn("Unable to remove breakpoint."));	//um?
 
 				this.breakpointTable.splice(breakpointIdx, 1);
 				this.fileManager.removeBreakpoint(event.path, event.line);
@@ -2312,7 +2360,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				this.devicePort = event.device.gdbPort;
 			break;
 		case "status":
-			console.log("devices: ", event.devices);
+			console_log("devices: ", event.devices);
 			this.deviceView.setData(event.devices);
 			this.deviceView.setSelected(this.devicePort);
 
@@ -2333,7 +2381,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				{
 				case "running":
 				case "stopped":
-					console.warn("Unplugged the device we were debugging with!");
+					console_warn("Unplugged the device we were debugging with!");
 					this.setRunState("editing");
 					break;
 				}
@@ -2356,7 +2404,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		switch(status.state)
 		{
 		case "stopped":
-			console.log(">>> UI set for stopped mode <<<: ", status);
+			console_log(">>> UI set for stopped mode <<<: ", status);
 			
 			this.codeTalker.updateCallstack(function(err)
 			{
@@ -2380,7 +2428,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				else if((callstack.length > 0) && (callstack[0].path))
 					this.fileManager.navigate(callstack[0].path, callstack[0].line);
 				else
-					console.warn("We're stopped, but I don't know where!");
+					console_warn("We're stopped, but I don't know where!");
 
 				//update variables for that frame (also highlights the right frame in the stack view)
 				this.updateVarsForFrame();
@@ -2389,7 +2437,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.setRunState(status.state);
 			break;
 		case "running":
-			console.log(">>> UI set for run mode <<<");
+			console_log(">>> UI set for run mode <<<");
 
 			//remove all annotations for the last callstack
 			this.stackView.setData();
@@ -2513,7 +2561,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				this.firmwareImage = undefined;
 				this.codeTalker.build(this.fileManager.getProjectPath(), function(err, elf, result)
 				{
-					console.log("Build complete, results: ", arguments);
+					console_log("Build complete, results: ", arguments);
 
 					if(!err)
 					{
@@ -2522,7 +2570,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						if(!result.compileErrors || (result.compileErrors.length == 0))
 							this.codeTalker.setELF(elf, function(error)
 							{
-								console.log("Set firmware to: ", elf, (error? "unsuccessfully" : "successfully"));
+								console_log("Set firmware to: ", elf, (error? "unsuccessfully" : "successfully"));
 								if(!error)
 									this.firmwareImage = elf;
 
@@ -2534,7 +2582,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					}
 					else
 					{
-						console.warn("Totally failed to build.");
+						console_warn("Totally failed to build.");
 						this.setRunState("editing");
 					}
 
@@ -2552,7 +2600,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.warn("Error: ", error, error.stack);
+						console_warn("Error: ", error, error.stack);
 					}
 				}.bind(this));
 			}
@@ -2569,7 +2617,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.warn("Error: ", error);
+						console_warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2591,7 +2639,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.warn("Error: ", error);
+						console_warn("Error: ", error);
 						return;
 					}
 					
@@ -2611,7 +2659,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 									if(error)
 									{
 										this.setRunState("stopped");
-										console.warn("Failed to continue! Error: ", error);
+										console_warn("Failed to continue! Error: ", error);
 									}
 									//else codetalker signals the correct run-time state transition
 								}.bind(this));
@@ -2620,7 +2668,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						else
 						{
 							this.setRunState("editing");
-							console.warn("Failed to flash! Error: ", error);
+							console_warn("Failed to flash! Error: ", error);
 						}
 					}.bind(this));
 
@@ -2639,7 +2687,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console.warn("Error: ", error);
+						console_warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2653,7 +2701,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)	//if connecting to the hardware failed or timed out
 					{
 						this.setAllButtonsEnabled(true);
-						console.warn("Error: ", error);
+						console_warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2678,7 +2726,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			if(callstack[frame].path)
 				this.fileManager.navigate(callstack[frame].path, callstack[frame].line);
 			else
-				console.warn("can't resolve that frame");
+				console_warn("can't resolve that frame");
 
 		}.bind(this));
 	},
@@ -2718,7 +2766,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		$("input", $el).val();
 		DialogView("Settings", $el, function(success, data)
 		{
-			console.log(success, data);
+			console_log(success, data);
 		}, this);
 	},
 	
@@ -2726,7 +2774,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 	{
 		DialogView("Settings", $("#settingsDialog"), function(success, data)
 		{
-			console.log(success, data);
+			console_log(success, data);
 		}, this);
 	}
 
@@ -2763,6 +2811,6 @@ $(function()
 		setWindowTitle();
 	}).fail(function()
 	{
-		console.warn("startup failed, fall back to launchupdate layer.");
+		console_warn("startup failed, fall back to launchupdate layer.");
 	});
 });
