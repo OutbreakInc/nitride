@@ -52,6 +52,9 @@ $(document).keydown(function(e)
 var Path = require("path");
 __dirname = Path.dirname(unescape(window.location.pathname));
 
+if(__dirname.indexOf(":") > 0)	//Windows has malformed local urls, fix them by lopping off an unneeded slash
+	__dirname = __dirname.substr(1);
+
 //custom require():
 //  why? node-webkit demonstrates non-node.js-compliant require() behaviour when navigating between
 //    different pages.  We expect require() to use the current directory of a js file
@@ -62,6 +65,7 @@ __dirname = Path.dirname(unescape(window.location.pathname));
 
 require = (function()
 {
+
 	var R = require;
 	var retry = function _require_retry(name)
 	{
@@ -69,17 +73,23 @@ require = (function()
 		while((d != Path.sep))
 		{
 			try{ return(R(Path.join(d, "node_modules", name))); }
-			catch(e){ d = Path.dirname(d); }	//and try again
+			catch(e) {}
+			try{ return(R(Path.join(d, "node_modules", name + ".js"))); }
+			catch(e) {}
+			d = Path.dirname(d);	//and try again
 		}
 		return(R(name));	//last chance: built-in
 	};
 	return(function _require(name)
 	{
 		if(name.substr(0, 1) == ".")
+		{
 			try{ return(R(Path.join(__dirname, name))); }
-			catch(e){ return(retry(name)); }
-		else
-			return(retry(name));
+			catch(e) {}
+			try{ return(R(Path.join(__dirname, name + ".js"))); }
+			catch(e) {}
+		}
+		return(retry(name));
 	});
 })();
 
