@@ -2592,6 +2592,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					}
 					else
 					{
+						this.problemsView.setData([{file: err.file, line: err.line || 0, err: err.message}])
 						console_warn("Totally failed to build.");
 						this.setRunState("editing");
 					}
@@ -2637,11 +2638,14 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				this.setAllButtonsEnabled(false);
 				
 				//ugly hack just to ensure we connect with a proper device //@@necessary???
-				if(this.devicePort == undefined)
+				if((this.devicePort == undefined) && this.deviceView.data && this.deviceView.data[0])
 					this.devicePort = (this.deviceView.data && this.deviceView.data[0].gdbPort);
 
 				if(this.devicePort == undefined)
+				{
+					console_warn("will not flash because this.devicePort could not be set.");
 					break;
+				}
 
 				this.setRunState("flashing");
 				this.codeTalker.connect(this.devicePort, function(error)
