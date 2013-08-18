@@ -5,17 +5,20 @@
 
 ////////////////////////////////////////////////////////////////
 // patches
-function console_log()
+_console =
 {
-	if(console)
-		console.log.apply(console, arguments);
-}
+	log: function _console_log()
+	{
+		if(console)
+			console.log.apply(console, arguments);
+	},
 
-function console_warn()
-{
-	if(console)
-		console.warn.apply(console, arguments);
-}
+	warn: function _console_warn()
+	{
+		if(console)
+			console.warn.apply(console, arguments);
+	}
+};
 
 //catch exceptions, if possible.  If we're in-between pages or things are busted, rethrow to at least log the error.
 //  Node.js says the "uncaughtException" event is effectively unrecoverable.
@@ -70,7 +73,7 @@ require = (function()
 	var retry = function _require_retry(name)
 	{
 		var d = __dirname;
-		while((d != Path.sep))
+		while((d != Path.dirname(d)))
 		{
 			try{ return(R(Path.join(d, "node_modules", name))); }
 			catch(e) {}
@@ -239,7 +242,7 @@ File.prototype = _.extend(new Dagger.Object(),
 	{
 		if(!error)
 		{
-			console_log("read file: ", this.path)
+			(console || _console).log("read file: ", this.path)
 			this.contents = contents;
 
 			this.trigger(new Dagger.Event(this, "load", {error: false}));
@@ -299,11 +302,11 @@ File.prototype = _.extend(new Dagger.Object(),
 
 		this._needsSave = false;
 
-		console_log("will save '" + this.path + "' now.");
+		(console || _console).log("will save '" + this.path + "' now.");
 		fs.writeFile(this.path, this.contents, {encoding: "utf8"}, function(error)
 		{
 			if(error)
-				console_warn("error, write to backup path?!", error);
+				(console || _console).warn("error, write to backup path?!", error);
 		});
 	}
 });
@@ -381,7 +384,7 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 		else
 		{
 			this.close();
-			console_warn("Error opening file!")
+			(console || _console).warn("Error opening file!")
 			this.editor.setReadOnly(this.readOnly || (this.file == null));
 		}
 	},
@@ -697,13 +700,13 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		this._needsSave = false;
 
-		console_log("Saving project...");
+		(console || _console).log("Saving project...");
 		fs.writeFile(	Path.join(this.projectPath, "module.json"),
 						JSON.stringify(this.project),
 						{encoding: "utf8"},
 						function(err)
 		{
-			console_log("Project saved.");
+			(console || _console).log("Project saved.");
 		});
 	},
 	closeProject: function FileManager_closeProject()
@@ -917,7 +920,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 	addFile: function FileManager_addFile(subPath, relativeBase, navigateTo)
 	{
 		if(!subPath)
-			return(console_warn("probably not a valid path: ", subPath));
+			return((console || _console).warn("probably not a valid path: ", subPath));
 
 		var fileEntry = {base: relativeBase, dir: Path.dirname(subPath), name: Path.basename(subPath)};
 		
@@ -925,7 +928,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		if(path == undefined)	//unresolvable
 		{
-			console_warn("Could not resolve path:", subPath, relativeBase);
+			(console || _console).warn("Could not resolve path:", subPath, relativeBase);
 			return;
 		}
 
@@ -1369,7 +1372,7 @@ ListView.prototype = _.extend(new Dagger.Object(),
 		$r = $(event.currentTarget);
 
 		var index = $r.attr("data-index");
-		console_log("index " + index + " selected.");
+		(console || _console).log("index " + index + " selected.");
 		this.trigger(new Dagger.Event(this, "selected", {index: index}));
 	}
 });
@@ -1851,7 +1854,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 				}
 				catch(err)
 				{
-					console_warn("Cannot parse settings json! Re-initializing.");
+					(console || _console).warn("Cannot parse settings json! Re-initializing.");
 					this.settings = {};
 				}
 
@@ -1864,11 +1867,11 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		mkdirp(this.path, function(err)
 		{
 			if(err)
-				return(console_warn("Can't save project settings, must fly-by-night."));
+				return((console || _console).warn("Can't save project settings, must fly-by-night."));
 
 			fs.writeFile(Path.join(this.path, "settings.json"), JSON.stringify(this.settings), {encoding: "utf8"}, function(error)
 			{
-				console_log("saving settings " + (error? "failed." : "succeeded."));
+				(console || _console).log("saving settings " + (error? "failed." : "succeeded."));
 
 				//this.trigger(new Dagger.Event(this, "save", {error: !!error}));
 			}.bind(this));
@@ -1883,7 +1886,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		mkdirp(projectBase, function(err)
 		{
 			if(err)
-				return(console_warn("Error: could not create project: ", err));
+				return((console || _console).warn("Error: could not create project: ", err));
 
 			//create the project
 			fs.writeFile(Path.join(projectBase, "module.json"), JSON.stringify(
@@ -1898,12 +1901,12 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 			function(err)
 			{
 				if(err)
-					return(console_warn("Error: could not create project: ", err));
+					return((console || _console).warn("Error: could not create project: ", err));
 
 				fs.writeFile(Path.join(projectBase, "main.cpp"), "#include <GalagoAPI.h>\nusing namespace Galago;\n\nint main(void)\n{\n\twhile(true)\n\t\tsystem.sleep();\n}\n", function(err)
 				{
 					if(err)
-						return(console_warn("Error: could not create project: ", err));
+						return((console || _console).warn("Error: could not create project: ", err));
 
 					this.addExistingProject(projectBase, name);
 
@@ -1918,13 +1921,13 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		fs.readFile(Path.join(path, "module.json"), function(err, contents)
 		{
 			if(err)
-				return(console_warn("Could not add project because its module.json file could not be opened."));
+				return((console || _console).warn("Could not add project because its module.json file could not be opened."));
 			
 			var moduleJSON;
 			try{ moduleJSON = JSON.parse(contents); }
 			catch(e)
 			{
-				return(console_warn("Could not add project because its module.json file could not be parsed."));
+				return((console || _console).warn("Could not add project because its module.json file could not be parsed."));
 			}
 
 			//create and add the project to the IDE settings
@@ -2010,7 +2013,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 			}
 			else if($tab.hasClass("existingProject"))
 			{
-				console_log("would add: ", tree.getSelection());
+				(console || _console).log("would add: ", tree.getSelection());
 
 				if(!tree.getSelection())
 					return(false);
@@ -2160,14 +2163,14 @@ Autoupdater.prototype = _.extend(new Dagger.Object(),
 		{
 			clearInterval(uiUpdate);
 
-			console_log("autoupdate complete for: " + owner + "/" + moduleName);
+			(console || _console).log("autoupdate complete for: " + owner + "/" + moduleName);
 			$("div.bar", $line).addClass("bar-success");
 			status.progress = 1;
 			render();
 
 		}).fail(function(err)
 		{
-			console_warn("failed to locate or update module: " + owner + "/" + moduleName);
+			(console || _console).warn("failed to locate or update module: " + owner + "/" + moduleName);
 			$(".lastFile", $line).html("<em>error!</em>");
 			$("div.bar", $line).addClass("bar-danger");
 			clearInterval(uiUpdate);
@@ -2308,7 +2311,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.codeTalker.removeBreakpoint(this.breakpointTable[breakpointIdx].num, function(error)
 			{
 				if(error)
-					return(console_warn("Unable to remove breakpoint."));	//um?
+					return((console || _console).warn("Unable to remove breakpoint."));	//um?
 
 				this.breakpointTable.splice(breakpointIdx, 1);
 				this.fileManager.removeBreakpoint(event.path, event.line);
@@ -2370,7 +2373,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				this.devicePort = event.device.gdbPort;
 			break;
 		case "status":
-			console_log("devices: ", event.devices);
+			(console || _console).log("devices: ", event.devices);
 			this.deviceView.setData(event.devices);
 			this.deviceView.setSelected(this.devicePort);
 
@@ -2391,7 +2394,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				{
 				case "running":
 				case "stopped":
-					console_warn("Unplugged the device we were debugging with!");
+					(console || _console).warn("Unplugged the device we were debugging with!");
 					this.setRunState("editing");
 					break;
 				}
@@ -2414,7 +2417,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		switch(status.state)
 		{
 		case "stopped":
-			console_log(">>> UI set for stopped mode <<<: ", status);
+			(console || _console).log(">>> UI set for stopped mode <<<: ", status);
 			
 			this.codeTalker.updateCallstack(function(err)
 			{
@@ -2438,7 +2441,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				else if((callstack.length > 0) && (callstack[0].path))
 					this.fileManager.navigate(callstack[0].path, callstack[0].line);
 				else
-					console_warn("We're stopped, but I don't know where!");
+					(console || _console).warn("We're stopped, but I don't know where!");
 
 				//update variables for that frame (also highlights the right frame in the stack view)
 				this.updateVarsForFrame();
@@ -2447,7 +2450,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			this.setRunState(status.state);
 			break;
 		case "running":
-			console_log(">>> UI set for run mode <<<");
+			(console || _console).log(">>> UI set for run mode <<<");
 
 			//remove all annotations for the last callstack
 			this.stackView.setData();
@@ -2571,7 +2574,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 				this.firmwareImage = undefined;
 				this.codeTalker.build(this.fileManager.getProjectPath(), function(err, elf, result)
 				{
-					console_log("Build complete, results: ", arguments);
+					(console || _console).log("Build complete, results: ", arguments);
 
 					if(!err)
 					{
@@ -2580,7 +2583,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						if(!result.compileErrors || (result.compileErrors.length == 0))
 							this.codeTalker.setELF(elf, function(error)
 							{
-								console_log("Set firmware to: ", elf, (error? "unsuccessfully" : "successfully"));
+								(console || _console).log("Set firmware to: ", elf, (error? "unsuccessfully" : "successfully"));
 								if(!error)
 									this.firmwareImage = elf;
 
@@ -2593,7 +2596,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					else
 					{
 						this.problemsView.setData([{file: err.file, line: err.line || 0, err: err.message}])
-						console_warn("Totally failed to build.");
+						(console || _console).warn("Totally failed to build.");
 						this.setRunState("editing");
 					}
 
@@ -2611,7 +2614,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console_warn("Error: ", error, error.stack);
+						(console || _console).warn("Error: ", error, error.stack);
 					}
 				}.bind(this));
 			}
@@ -2628,7 +2631,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console_warn("Error: ", error);
+						(console || _console).warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2643,7 +2646,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 				if(this.devicePort == undefined)
 				{
-					console_warn("will not flash because this.devicePort could not be set.");
+					(console || _console).warn("will not flash because this.devicePort could not be set.");
 					break;
 				}
 
@@ -2653,7 +2656,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console_warn("Error: ", error);
+						(console || _console).warn("Error: ", error);
 						return;
 					}
 					
@@ -2673,7 +2676,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 									if(error)
 									{
 										this.setRunState("stopped");
-										console_warn("Failed to continue! Error: ", error);
+										(console || _console).warn("Failed to continue! Error: ", error);
 									}
 									//else codetalker signals the correct run-time state transition
 								}.bind(this));
@@ -2682,7 +2685,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 						else
 						{
 							this.setRunState("editing");
-							console_warn("Failed to flash! Error: ", error);
+							(console || _console).warn("Failed to flash! Error: ", error);
 						}
 					}.bind(this));
 
@@ -2701,7 +2704,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)
 					{
 						this.setAllButtonsEnabled(true);
-						console_warn("Error: ", error);
+						(console || _console).warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2715,7 +2718,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 					if(error)	//if connecting to the hardware failed or timed out
 					{
 						this.setAllButtonsEnabled(true);
-						console_warn("Error: ", error);
+						(console || _console).warn("Error: ", error);
 					}
 					//else codetalker signals the correct state transition
 				}.bind(this));
@@ -2740,7 +2743,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 			if(callstack[frame].path)
 				this.fileManager.navigate(callstack[frame].path, callstack[frame].line);
 			else
-				console_warn("can't resolve that frame");
+				(console || _console).warn("can't resolve that frame");
 
 		}.bind(this));
 	},
@@ -2780,7 +2783,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		$("input", $el).val();
 		DialogView("Settings", $el, function(success, data)
 		{
-			console_log(success, data);
+			(console || _console).log(success, data);
 		}, this);
 	},
 	
@@ -2788,7 +2791,7 @@ IDE.prototype = _.extend(new Dagger.Object(),
 	{
 		DialogView("Settings", $("#settingsDialog"), function(success, data)
 		{
-			console_log(success, data);
+			(console || _console).log(success, data);
 		}, this);
 	}
 
@@ -2825,6 +2828,6 @@ $(function()
 		setWindowTitle();
 	}).fail(function()
 	{
-		console_warn("startup failed, fall back to launchupdate layer.");
+		(console || _console).warn("startup failed, fall back to launchupdate layer.");
 	});
 });

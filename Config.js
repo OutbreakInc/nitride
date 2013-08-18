@@ -28,7 +28,7 @@ module.exports =
 		case "darwin":	return(path.join(process.env["HOME"], "Documents/Logiblock/projects"));
 		default:
 		case "linux":	return(path.join(process.env["HOME"], "logiblock/projects"));
-		case "win32":	return(path.join(process.env["HOMEDIR"], "Logiblock", "projects"));
+		case "win32":	return(path.join(process.env["HOMEDIR"] || process.env["USERPROFILE"], "Logiblock", "projects"));
 		}
 	},
 	modulesDir: function modulesDir()
@@ -38,7 +38,7 @@ module.exports =
 		case "darwin":	return(path.join(process.env["HOME"], "Documents/Logiblock/modules"));
 		default:
 		case "linux":	return(path.join(process.env["HOME"], "logiblock/modules"));
-		case "win32":	return(path.join(process.env["HOMEDIR"], "Logiblock", "modules"));
+		case "win32":	return(path.join(process.env["HOMEDIR"] || process.env["USERPROFILE"], "Logiblock", "modules"));
 		}
 	},
 	sdkName: function sdkName()
