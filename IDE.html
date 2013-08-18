@@ -12,11 +12,8 @@
 	<link rel="stylesheet" type="text/css" href="static/logiblock/IDE.css" media="screen"/>
 	<link rel="stylesheet" type="text/css" href="static/yui-2.9.0/treeview.css" media="screen"/>
 	
-	<!--<link rel="stylesheet" type="text/css" href="static/jquery-terminal-50bd0a0/jquery.terminal.css" media="screen"/>
--->
-
 	<style type="text/css">
-		body{ padding-top: 60px; padding-bottom: 40px;}
+		/*body{ padding-top: 60px; padding-bottom: 40px;}*/
 
 		.documentation,#dialog
 		{
@@ -75,34 +72,36 @@
 		</div>
 	</div>
 
-	<div class="section" id="home" style="display:none">
-		<div class="break">
-			<!--<p><em>Please excuse the crudity of this home screen,
-			I didn't have time to build it to scale or to paint it.</em></p>-->
-			<div class="alert alert-block alert-warning">
-				<h4>Notice</h4>
-				This is an alpha version of the Logiblock IDE. It is currently under intense
-				development.  If something is not working, check back later for an update or visit
-				<a href="http://logiblock.com/help" target="_blank">logiblock.com/help</a> for help.
-			</div>
-		</div>
-		<div id="recentProjects" class="break">
-			<hr/>
-			<div class="navbar">
-				<div class="navbar-inner">
-					<span class="brand" href="#">Projects</span>
-					<ul class="nav">
-						<li class="divider-vertical"></li>
-						<li><a id="createProject" href="#">Add / Remove</a></li>
-						<li class="divider-vertical"></li>
-					</ul>
-					<!--<form id="projectSearch" class="navbar-search pull-left">
-						<input type="text" class="search-query disabled" placeholder="Search">
-					</form>-->
+	<div id="home">
+		<div class="scroll">
+			<div class="section break sectionBreak">
+				<!--<p><em>Please excuse the crudity of this home screen,
+				I didn't have time to build it to scale or to paint it.</em></p>-->
+				<div class="alert alert-block alert-warning">
+					<h4>Notice</h4>
+					This is an alpha version of the Logiblock IDE. It is currently under intense
+					development.  If something is not working, check back later for an update or visit
+					<a href="http://logiblock.com/help" target="_blank">logiblock.com/help</a> for help.
 				</div>
 			</div>
+			<div id="recentProjects" class="break section">
+				<hr/>
+				<div class="navbar">
+					<div class="navbar-inner">
+						<span class="brand" href="#">Projects</span>
+						<ul class="nav">
+							<li class="divider-vertical"></li>
+							<li><a id="createProject" href="#">Add / Remove</a></li>
+							<li class="divider-vertical"></li>
+						</ul>
+						<!--<form id="projectSearch" class="navbar-search pull-left">
+							<input type="text" class="search-query disabled" placeholder="Search">
+						</form>-->
+					</div>
+				</div>
 
-			<ul class="list thumbnails break"></ul>
+				<ul class="list thumbnails break"></ul>
+			</div>
 		</div>
 	</div>
 	
@@ -116,7 +115,7 @@
 					<li id="files" class="visibleEdit visibleDebug">
 						<div class="sidebarHeader">
 							Files
-							<span class="sidebarHeaderButton"><span class="icon-cog"></span> Add/Remove</span>
+							<span class="sidebarHeaderButton"><span class="icon-plus"></span> / <span class="icon-minus"></span>
 						</div>
 						<div class="sidebarSection">
 							<ul class="list listView">
@@ -133,16 +132,16 @@
 							</ul>
 						</div>
 					</li>-->
-					<!--<li class="visibleEdit">
+					<li class="visibleEdit">
 						<div class="sidebarHeader">
 							Modules
-							<div class="sidebarHeaderButton icon-cog"></div>
+							<span class="sidebarHeaderButton"><span class="icon-plus"></span> / <span class="icon-minus"></span>
 						</div>
 						<div class="sidebarSection">
 							<ul id="modules" class="listView">
 							</ul>
 						</div>
-					</li>-->
+					</li>
 					<li id="devices" class="visibleEdit">
 						<div class="sidebarHeader">
 							Devices
@@ -388,8 +387,9 @@
 			device and run it from the beginning.</p>
 			<p><strong>While paused in a debug session:</strong> press this button to continue running the program.</p>
 			<hr/>
-			<p><em><span class="icon-pause"></span><strong>Pause at start:</strong> Hold <strong>shift</strong> while pressing this button to have the device pause
-			on the first instruction when starting from the beginning.</em></p>
+			<p><em><span class="icon-pause"></span><strong>Pause at start:</strong> Hold <strong>shift</strong> while
+			 pressing this button to have the device pause on the first instruction when starting from the beginning.
+			</em></p>
 		</div>
 	</div>
 	<div class="documentation" data-for="debugPause">
@@ -398,12 +398,10 @@
 		</div>
 		<div class="body">
 			<p><strong>During a debug session:</strong> press this button to pause the program.  The device will pause
-			wherever it happens to be running, which might be your source code, a library function or
-			perhaps a ROM routine.</p>
+			wherever it happens to be running.</p>
 			<hr/>
-			<p><strong>When editing:</strong> press this button to attach to a device and pause it without downloading
-			new firmware or starting from the beginning. If a device was already paused, pressing this
-			button will show you where the program stopped.</p>
+			<p><strong>When editing:</strong> press to attach to a device and pause it without downloading
+			new firmware. If a device was already paused when attached, this will show you where the program stopped.</p>
 		</div>
 	</div>
 	<div class="documentation" data-for="stop">
