@@ -132,13 +132,13 @@
 							</ul>
 						</div>
 					</li>-->
-					<li class="visibleEdit">
+					<li id="modules" class="visibleEdit">
 						<div class="sidebarHeader">
 							Modules
 							<span class="sidebarHeaderButton"><span class="icon-plus"></span> / <span class="icon-minus"></span>
 						</div>
 						<div class="sidebarSection">
-							<ul id="modules" class="listView">
+							<ul class="list listView">
 							</ul>
 						</div>
 					</li>
@@ -193,7 +193,7 @@
 
 
 	<div id="dialog">
-		<div id="projectFilesDialog">
+		<div id="projectFilesDialog" title="Add / Remove Project Files">
 			
 			<div class="tabbable tabs-left">
 				<ul class="nav nav-tabs">
@@ -214,7 +214,7 @@
 							</div>
 						</form>
 						<div class="alert alert-error" style="display:none">
-							<p>That's not a valid filename. Paths cannot be absolute or contain parent references (<strong>../</strong>). Additionally, source files must end in on of:</p><p><strong>.c .cpp .cc .cxx .h .hpp .hh .hxx .S</strong> or <strong>.s</strong></p>
+							<p>That's not a valid filename. Paths cannot be absolute or contain parent references (<strong>../</strong>). Additionally, source files must end in one of:</p><p><strong>.c .cpp .cc .cxx .h .hpp .hh .hxx .S</strong> or <strong>.s</strong></p>
 						</div>
 					</div>
 
@@ -239,8 +239,48 @@
 
 		</div>
 
+		<div id="modulesDialog" title="Add / Remove Module Dependencies">
+			
+			<div class="tabbable tabs-left">
+				<ul class="nav nav-tabs">
+					<li class="active"><a href="#modulesDialog_tab_search" data-toggle="tab"><span class="icon-plus"></span> Create New</a></li>
+					<li><a href="#modulesDialog_tab_remove" data-toggle="tab"><span class="icon-remove"></span> Remove</a></li>
+				</ul>
+				<div class="tab-content">
+					
+					<div class="tab-pane active newFile" id="modulesDialog_tab_search">
+						<form class="form-horizontal form-search">
+							<div class="control-group">
+								<label class="control-label" for="modulesDialog_tab_search_query" style="width: 60px;">Keywords</label>
+								<div class="controls" style="margin-left: 80px;">
+									<div class="input-append">
+										<input type="text" id="modulesDialog_tab_search_query" class="search-query" name="keywords" placeholder="gps, stepper, audio"/>
+									    <button type="submit" class="btn">Go</button>
+									</div>
+									<span class="help-block">Modules are blocks of functionality that your application is built on,
+										sometimes known as <em>&quot;libraries&quot;</em> Search for modules by name, keywords or author.</span>
+								</div>
+							</div>
+						</form>
+						<div class="moduleResults">
+							<ul class="list listView"></ul>
+						</div>
+					</div>
 
-		<div id="createProjectDialog">
+					<div class="tab-pane removeModule" id="modulesDialog_tab_remove">
+						<form>
+							<div class="currentModule fileBrowser">
+								<ul class="list listView"></ul>
+							</div>
+						</form>
+					</div>
+
+				</div>
+			</div>
+
+		</div>
+
+		<div id="createProjectDialog" title="Add / Remove Project">
 			<div class="tabbable tabs-left">
 				<ul class="nav nav-tabs">
 					<li class="active"><a href="#createProjectDialog_tab_new" data-toggle="tab"><span class="icon-plus"></span> Create New</a></li>
@@ -297,7 +337,7 @@
 
 
 
-		<div id="settingsDialog">
+		<div id="settingsDialog" title="Settings">
 			<div class="tabbable tabs-left">
 				<ul class="nav nav-tabs">
 					<li class="active"><a href="#settingsDialog_tab_general" data-toggle="tab">

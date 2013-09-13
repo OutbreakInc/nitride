@@ -451,7 +451,7 @@ EditorView.prototype = _.extend(new Dagger.Object(),
 	removeAnnotation: function EditorView_removeAnnotation(file, line, type)
 	{
 		//ensure same file
-		if(file != this.file.path)
+		if(!this.file || (file != this.file.path))
 			return;
 
 		switch(type)
@@ -638,6 +638,15 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			this.navigate(e.index);
 		}, this);
 	},
+	setModulesView: function FileManager_setModulesView(modulesView)
+	{
+		this.modulesView = modulesView;
+
+		this.modulesView.listen("addModule", function(e)
+		{
+			this.showModulesDialog();
+		}, this);
+	},
 
 	getProjectPath: function FileManager_getProjectPath()
 	{
@@ -663,6 +672,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			}
 
 			var files = this.updateFilesView();
+			this.updateModulesView();
 
 			if(files.length > 0)
 				this.navigate(files[0].path);
@@ -715,6 +725,8 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 			this.saveProject(true);
 
 		//close all tabs of files belonging to this project?
+
+		this.editor.close();
 
 		this.project = undefined;
 		this.projectPath = undefined;
@@ -1000,6 +1012,20 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 		return(files);
 	},
+	updateModulesView: function FileManager_updateFilesView()
+	{
+		var depList = [], deps = this.project.dependencies || {};
+		Object.keys(deps).map(function(e)
+		{
+			depList.push(
+			{
+				name: e,
+				version: deps[e]
+			})
+		});
+
+		this.modulesView.setData(depList);
+	},
 
 	showProjectFilesDialog: function FileManager_showProjectFilesDialog()
 	{
@@ -1046,7 +1072,7 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 		$("input", $dialog).val("");
 
 		//displayed synchronously, though the tree view is displayed asynchronously after dirs have been scanned
-		DialogView("Add/Remove Project Files", $dialog, function(success)
+		DialogView($dialog, function(success)
 		{
 			if(!success)	return;	//ignore
 
@@ -1085,9 +1111,19 @@ FileManager.prototype = _.extend(new Dagger.Object(),
 
 			listView.destroy();
 		}, this);
+	},
+
+	showModulesDialog: function FileManager_showModulesDialog()
+	{
+		var $dialog = $("#modulesDialog");
+
+		DialogView($dialog, function(success)
+		{
+
+		});
 	}
 });
-function FileManager(pathsTable, editor, filesView)
+function FileManager(pathsTable, editor, filesView, modulesView)
 {
 	Dagger.Object.call(this);
 	_.extend(this,
@@ -1105,6 +1141,7 @@ function FileManager(pathsTable, editor, filesView)
 	
 	this.setEditor(editor);
 	this.setFilesView(filesView);
+	this.setModulesView(modulesView);
 }
 
 
@@ -1491,6 +1528,43 @@ function FilesView(selector, renderFn)
 }
 
 
+ModulesView.prototype = _.extend(new ListView(),
+{
+	_render: function ModulesView__render(item, index, data)
+	{
+		var $line = $("<li/>");
+		$line.html(item.name + " <em>" + item.version + "</em>");
+		$line.addClass((index & 1)? "odd" : "even");
+		$line.attr("data-index", item.name + "@" + item.version);
+		$line.attr("title", item.name + " @ <em>" + item.version + "</em>");
+
+		$line.tooltip({html: true, placement: "left", trigger: "hover", container: "#editor", delay: 500});
+		
+		return($line);
+	},
+	_onModify: function ModulesView__onModify(event)
+	{
+		this.trigger(new Dagger.Event(this, "addModule"));	//let another component handle the dialog
+	},
+	setData: function ModulesView_setData(data)
+	{
+		ListView.prototype.setData.apply(this, arguments);
+
+		if((this.data == undefined) || (this.data.length == 0))
+		{
+			var $line = $("<li><em>(no modules)</em></li>");
+			$line.addClass("even");
+			this.$list.append($line);
+		}
+	},
+});
+function ModulesView(selector, renderFn)
+{
+	ListView.apply(this, arguments);
+}
+
+
+
 RemoveFileView.prototype = _.extend(new ListView(),
 {
 	_render: function RemoveFileView__render(item, index, data)
@@ -1621,9 +1695,9 @@ function ProblemsView(selector)
 
 
 //you may pass a jQ selector or a $(domElement) for 'dialogSelector'
-function DialogView(title, dialogSelector, callback, context)
+function DialogView(dialogSelector, callback, context)
 {
-	var $el = $("#modalDialog"), $contents = $(dialogSelector);
+	var $el = $("#modalDialog"), $contents = $(dialogSelector), title = $contents.attr("title");
 
 	//fill it up
 	$("h3", $el).html(title);
@@ -1641,11 +1715,7 @@ function DialogView(title, dialogSelector, callback, context)
 			$ok.unbind("click", submit);
 			$cancel.unbind("click", fail);
 			$f.unbind("submit", submit);
-			$el.modal("hide").on("hidden", function()
-			{
-				$el.unbind("hidden");
-				$("#dialog").append($contents);
-			});
+			$el.modal("hide");
 		}
 	};
 	var submit = function DialogView_sumbit(e)
@@ -1670,9 +1740,13 @@ function DialogView(title, dialogSelector, callback, context)
 	{
 		$el.unbind("shown");
 		$($("input", $el)[0]).focus();
-	});	//show it
+	}).on("hidden", function()
+	{
+		$el.unbind("hidden");
+		$("#dialog").append($contents);
+	});
 
-	$el.modal("show");
+	$el.modal("show");	//show it
 }
 
 
@@ -1995,7 +2069,7 @@ SettingsManager.prototype = _.extend(new Dagger.Object(),
 		listView.setData(this.settings.recentProjects || {});
 
 
-		DialogView("Add / Remove Project", $dialog, function(success, data)
+		DialogView($dialog, function(success, data)
 		{
 			if(!success) return;	//ignore
 
@@ -2207,9 +2281,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 
 		this.filesView = new FilesView("#files");
 		
+		this.modulesView = new ModulesView("#modules");
+
 		this.settingsManager = new SettingsManager(this.codeTalker.getPaths());
 
-		this.fileManager = new FileManager(this.codeTalker.getPaths(), this.editor, this.filesView);
+		this.fileManager = new FileManager(this.codeTalker.getPaths(), this.editor, this.filesView, this.modulesView);
 
 		this.tabs = new TabView("#tabs", this.fileManager);
 
@@ -2763,13 +2839,14 @@ IDE.prototype = _.extend(new Dagger.Object(),
 		$("#editor").hide();
 		this.fileManager.closeProject();
 		this.tabs.setData();	//@@hackish
-
+		$(".homeArrow", $("#homeButton")).hide();
 		$("#home").show();
 	},
 
 	openProject: function IDE_openProject(projectPath)
 	{
 		$("#home").hide();
+		$(".homeArrow", $("#homeButton")).show();
 
 		this.setRunState("editing");
 		this.fileManager.openProject(projectPath);
@@ -2781,20 +2858,11 @@ IDE.prototype = _.extend(new Dagger.Object(),
 	{
 		var $el = $("#settingsDialog");
 		$("input", $el).val();
-		DialogView("Settings", $el, function(success, data)
-		{
-			(console || _console).log(success, data);
-		}, this);
-	},
-	
-	showUpdateSettings: function IDE_showSettings()
-	{
-		DialogView("Settings", $("#settingsDialog"), function(success, data)
+		DialogView($el, function(success, data)
 		{
 			(console || _console).log(success, data);
 		}, this);
 	}
-
 });
 function IDE()
 {
